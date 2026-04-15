@@ -72,7 +72,7 @@ OBJ+= $(OCP_OBJ)
 
 EXTERNAL_DIR=
 EXTERNAL_LIB=
-EXTERNAL_DIR+= /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/scripts/_l4c_generated
+EXTERNAL_DIR+= /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/_l4c_generated
 EXTERNAL_LIB+= residual_quadrotor2D
 
 INCLUDE_PATH = /home/zeyu0920/acados/include
@@ -136,7 +136,7 @@ ocp_cython_c: ocp_shared_lib
 	-o acados_ocp_solver_pyx.c \
 	-I $(INCLUDE_PATH)/../interfaces/acados_template/acados_template \
 	$(INCLUDE_PATH)/../interfaces/acados_template/acados_template/acados_ocp_solver_pyx.pyx \
-	-I /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/scripts/c_generated_code \
+	-I /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/c_generated_code \
 
 ocp_cython_o: ocp_cython_c
 	$(CC) $(ACADOS_FLAGS) -c -O2 \
@@ -165,7 +165,7 @@ sim_cython_c: sim_shared_lib
 	-o acados_sim_solver_pyx.c \
 	-I $(INCLUDE_PATH)/../interfaces/acados_template/acados_template \
 	$(INCLUDE_PATH)/../interfaces/acados_template/acados_template/acados_sim_solver_pyx.pyx \
-	-I /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/scripts/c_generated_code \
+	-I /mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/c_generated_code \
 
 sim_cython_o: sim_cython_c
 	$(CC) $(ACADOS_FLAGS) -c -O2 \

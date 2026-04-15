@@ -58,7 +58,7 @@ if args.noise_std is not None:
 
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+NUM_RUNS = 10
 BASE_SEED = args.seed
 
 all_run_errors = []
@@ -380,13 +380,13 @@ plt.tight_layout()
 
 # Plot error curve
 plt.figure(figsize=(10, 4))
-min_len = min(len(x_history), len(x_ref_history))
-x_err = np.abs(x_history[:min_len, 0] - x_ref_history[:min_len, 0])
-z_err = np.abs(x_history[:min_len, 2] - x_ref_history[:min_len, 1])
-xz_euclid_err = np.sqrt(x_err**2 + z_err**2)
+x_err = x_history[1:, 0] - x_ref_history[:, 0]
+z_err = x_history[1:, 2] - x_ref_history[:, 1]
+
+xz_err = np.sqrt(x_err**2 + z_err**2)
 
 
-plt.plot(t_grid_states[:min_len], xz_euclid_err, label='Euclidean x-z error', color='C3', linewidth=2, linestyle='--')
+plt.plot(xz_err, label='Euclidean x-z error', color='C3', linewidth=2, linestyle='--')
 plt.xlabel('Time [s]')
 plt.ylabel('Error [m]')
 plt.legend()

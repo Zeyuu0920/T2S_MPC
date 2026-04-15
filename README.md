@@ -2,6 +2,12 @@
 
 Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Online Adaptive MPC for Time-Varying Dynamics"
 
+## 🎥 Demo
+
+<p align="center">
+  <img src="demo_videos/demo.gif" width="600">
+</p>
+
 ## 🧠 Overview
 <p align="center">
   <img src="Figures/Method.png" width="300">
@@ -38,6 +44,10 @@ all scenarios
 
 ## 🛠️ Installation
 
+### Clone the repository
+
+```git clone https://github.com/Zeyuu0920/T2S_MPC.git ```
+
 ###  Create a conda environment
 
 ```bash
@@ -45,7 +55,7 @@ conda env create -f environment.yml
 conda activate l4control
 ```
 
-###  Create a conda environment
+###  Install ```l4casadi```
 Install the latest version using pip with ```bash--no-build-isolation``` (GPU/CUDA supported)
 ```bash
 pip install l4casadi --no-build-isolation
@@ -74,7 +84,13 @@ Fix installation issues (if any)
 If you encounter any remaining errors, manually install the missing or incompatible packages.
 Package versions may vary depending on your system environment.
 
-## Repository Structure
+## 📌 Reproduce Main Results
+We made a bash script to reproduce main results
+```reproduce_main_results.sh```
+
+Each script will make folder to store results automatically.
+
+## 📚 Repository Structure
 
 ```bash
 T2S_Neural_MPC

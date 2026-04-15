@@ -107,7 +107,7 @@ class MPC:
             ocp.solver_options.model_external_shared_lib_name = self.external_shared_lib_name
         else:
             ocp.solver_options.model_external_shared_lib_name = self.external_shared_lib_name + ' -l' + l4c_y_expr.name
-
+     
         return ocp
 
     def acados_model(self, model):

@@ -1,7 +1,7 @@
 {
     "acados_include_path": "/home/zeyu0920/acados/include",
     "acados_lib_path": "/home/zeyu0920/acados/lib",
-    "code_export_directory": "/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/scripts/c_generated_code",
+    "code_export_directory": "/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/c_generated_code",
     "constraints": {
         "C": [],
         "C_e": [],
@@ -870,7 +870,7 @@
         "levenberg_marquardt": 0.0,
         "log_dual_step_norm": false,
         "log_primal_step_norm": false,
-        "model_external_shared_lib_dir": "/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/scripts/_l4c_generated",
+        "model_external_shared_lib_dir": "/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/_l4c_generated",
         "model_external_shared_lib_name": "residual_quadrotor2D",
         "nlp_qp_tol_min_comp": 1e-11,
         "nlp_qp_tol_min_eq": 1e-10,

@@ -58,7 +58,7 @@ if args.noise_std is not None:
 
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+NUM_RUNS = 10
 BASE_SEED = args.seed
 
 all_run_errors = []

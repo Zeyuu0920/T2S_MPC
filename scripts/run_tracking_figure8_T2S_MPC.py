@@ -58,7 +58,7 @@ if args.noise_std is not None:
 
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+NUM_RUNS = 10
 BASE_SEED = args.seed
 TIME_FEAT_DIM = 32
 TIME_SCALE = 1.0
@@ -338,14 +338,9 @@ time_scale=TIME_SCALE,)
                 loss_fast_history.append(float(loss_fast.detach().cpu()))
                 print(loss_fast,"loss_fast")
                 updated = True
-            if updated:
-                l4c_residual.update(residual_mlp)
             elapsed_fast = time.time() - start
             print(elapsed_fast, "iteration time")
             opt_times_fast.append(elapsed_fast)
-
-            for p in residual_mlp.parameters():
-                p.requires_grad = True
 
         #slow update
         if i > 0 and (i % SLOW_UPDATE_EVERY == 0) and len(obs_buffer) >= B_SLOW:
@@ -374,16 +369,16 @@ time_scale=TIME_SCALE,)
                 loss_slow.backward()
                 slow_optimizer.step()
                 updated = True
-            
-            if updated:
-                l4c_residual.update(residual_mlp)
         
             elapsed_slow = time.time() - start_2
             print(elapsed_slow, "iteration time")
             opt_times_slow.append(elapsed_slow)
-            for p in residual_mlp.parameters():
-              p.requires_grad = True
-    
+        
+        if updated:
+            l4c_residual.update(residual_mlp)
+        for p in residual_mlp.parameters():
+            p.requires_grad = True
+
     env.close()
     u_history = np.array(u_history)
 
@@ -493,13 +488,13 @@ plt.tight_layout()
 
 # Plot error curve
 plt.figure(figsize=(10, 4))
-min_len = min(len(x_history), len(x_ref_history))
-x_err = np.abs(x_history[:min_len, 0] - x_ref_history[:min_len, 0])
-z_err = np.abs(x_history[:min_len, 2] - x_ref_history[:min_len, 1])
-xz_euclid_err = np.sqrt(x_err**2 + z_err**2)
+x_err = x_history[1:, 0] - x_ref_history[:, 0]
+z_err = x_history[1:, 2] - x_ref_history[:, 1]
+
+xz_err = np.sqrt(x_err**2 + z_err**2)
 
 
-plt.plot(t_grid_states[:min_len], xz_euclid_err, label='Euclidean x-z error', color='C3', linewidth=2, linestyle='--')
+plt.plot(xz_err, label='Euclidean x-z error', color='C3', linewidth=2, linestyle='--')
 plt.xlabel('Time [s]')
 plt.ylabel('Error [m]')
 plt.legend()

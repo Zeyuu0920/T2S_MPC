@@ -60,7 +60,7 @@ if args.noise_std is not None:
     wind_params["noise_std"] = args.noise_std
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+NUM_RUNS = 10
 BASE_SEED = args.seed
 
 all_run_errors = []
@@ -270,7 +270,7 @@ for run_id in range(NUM_RUNS):
         seed = env_config['seed']
         os.makedirs("results_stabilization", exist_ok=True)
 
-        name_parts = [f"nominal_{WIND_TYPE}"]
+        name_parts = [f"Nominal_MPC_{WIND_TYPE}"]
 
         if args.A is not None:
             name_parts.append(f"A{args.A}")

@@ -58,7 +58,7 @@ if args.noise_std is not None:
 
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+NUM_RUNS = 10
 BASE_SEED = args.seed
 TIME_FEAT_DIM = 32
 TIME_SCALE = 1.0
@@ -72,7 +72,7 @@ env_config = {
     'gui': False,  # Set to False for faster data collection
     'ctrl_freq': 50,  # Control frequency
     'pyb_freq': 50,  # Physics simulation frequency
-    'seed': 42,
+    'seed': 41,
     'done_on_out_of_bound': True,  # Set to False if you want longer episodes
     
     'init_state_randomization_info': {
@@ -85,6 +85,10 @@ env_config = {
     }
 
 }
+
+np.random.seed(42)
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
 
 env = Quadrotor(**env_config)
 model = env.symbolic
@@ -128,6 +132,61 @@ def reset_module(m):
 N = 20
 t_horizon = 1
 
+# ============================================================
+# Build model / solver ONCE outside the run loop (match original script)
+# ============================================================
+
+# create one environment for building symbolic model / solver
+env = Quadrotor(**env_config)
+obs, info = env.reset()
+# create residual network
+residual_mlp = TwoSpeedMLP(
+    input_dim=8 + TIME_FEAT_DIM,
+    hidden_dim=64,
+    output_dim=3
+)
+
+# build l4casadi wrapper once
+with torch.no_grad():
+    dummy_inp = torch.zeros((1, 8 + TIME_FEAT_DIM), dtype=torch.float32)
+    l4c_residual = l4c.L4CasADi(
+        residual_mlp,
+        name="residual_quadrotor2D",
+        mutable=True
+    )
+    l4c_residual.build(inp=dummy_inp)
+
+# follow original script: parameters initially trainable afterwards
+for p in residual_mlp.parameters():
+    p.requires_grad = True
+
+# build dynamics / nominal function / solver once
+learned_model = Quadrotor2DDynamics(
+    env,
+    residual_model=l4c_residual,
+    use_residual=True,
+    use_time_embedding=True,
+    time_feat_dim=TIME_FEAT_DIM,
+    time_scale=TIME_SCALE,
+)
+
+casadi_model = learned_model.model()
+nominal_func = cs.Function(
+    'nom',
+    [casadi_model.x, casadi_model.u],
+    [casadi_model.f_nominal]
+)
+
+solver = MPC(
+    model=learned_model.model(),
+    N=N,
+    t_horizon=t_horizon,
+    external_shared_lib_dir=l4c_residual.shared_lib_dir,
+    external_shared_lib_name=l4c_residual.name
+).solver
+
+# same as original script: push current network weights once
+l4c_residual.update(residual_mlp)
 # ------------------------------------------------------------------------------
 # Simulation Setup
 dt = 1.0 / env_config['pyb_freq']
@@ -171,38 +230,18 @@ for run_id in range(NUM_RUNS):
     print("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
     print("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
     
-    # 3️⃣ Reset Neural Network/Solver
-    # Create PyTorch residual model
+    # reset the already-existing residual_mlp first
+    residual_mlp.apply(reset_module)
+
+    # then create the actual network for this run
     residual_mlp = TwoSpeedMLP(
         input_dim=8 + TIME_FEAT_DIM,
         hidden_dim=64,
         output_dim=3
     )
 
-    #Build L4CasADi wrapper
-    with torch.no_grad():
-        dummy_inp = torch.zeros((1, 8 + TIME_FEAT_DIM), dtype=torch.float32)
-        l4c_residual = l4c.L4CasADi(
-            residual_mlp,
-            name="residual_quadrotor2D",
-            mutable=True
-        )
-        l4c_residual.build(inp=dummy_inp)
-    for param in residual_mlp.parameters():
-        param.requires_grad = False
-
-    learned_model = Quadrotor2DDynamics(env,residual_model=l4c_residual,use_residual=True,use_time_embedding=True,time_feat_dim=TIME_FEAT_DIM,
-time_scale=TIME_SCALE,)
-    casadi_model = learned_model.model()
-    nominal_func = cs.Function('nom', [casadi_model.x, casadi_model.u], [casadi_model.f_nominal])
-    solver = MPC(
-        model=learned_model.model(),
-        N=N,
-        t_horizon=t_horizon,
-        external_shared_lib_dir=l4c_residual.shared_lib_dir,
-        external_shared_lib_name=l4c_residual.name
-    ).solver
-
+    # sync new weights into the already-built l4casadi wrapper / solver graph
+    l4c_residual.update(residual_mlp)
 
     #Setup optimizers / loss
     slow_params = list(residual_mlp.layer1.parameters()) + list(residual_mlp.layer2.parameters())
@@ -224,7 +263,7 @@ time_scale=TIME_SCALE,)
     loss_fast_history = []
     loss_slow_history = []
     Ax=[]
-    x_prev=None
+    
 
     #Simulation
     for i in range(Steps):
@@ -251,11 +290,17 @@ time_scale=TIME_SCALE,)
         # Apply current state as constraint
         solver.set(0, "lbx", xt)
         solver.set(0, "ubx", xt)
+        
+        if "u_prev" in locals():
+            for k in range (N):
+                solver.set(k, "u", u_prev[k])
 
         # Solve MPC and apply control
         solver.solve()
         ut = solver.get(0, "u")
         u_history.append(ut)
+
+        u_prev = np.vstack([solver.get(k, "u") for k in range(N)])
 
         #Disturbance induce
         ax = wind_fn(current_time, **wind_params)
@@ -325,14 +370,10 @@ time_scale=TIME_SCALE,)
                 loss_fast_history.append(float(loss_fast.detach().cpu()))
                 print(loss_fast,"loss_fast")
                 updated = True
-            if updated:
-                l4c_residual.update(residual_mlp)
+
             elapsed_fast = time.time() - start
             print(elapsed_fast, "iteration time")
             opt_times_fast.append(elapsed_fast)
-
-            for p in residual_mlp.parameters():
-                p.requires_grad = True
 
         #slow update
         if i > 0 and (i % SLOW_UPDATE_EVERY == 0) and len(obs_buffer) >= B_SLOW:
@@ -361,15 +402,15 @@ time_scale=TIME_SCALE,)
                 loss_slow.backward()
                 slow_optimizer.step()
                 updated = True
-            
-            if updated:
-                l4c_residual.update(residual_mlp)
         
             elapsed_slow = time.time() - start_2
             print(elapsed_slow, "iteration time")
             opt_times_slow.append(elapsed_slow)
-            for p in residual_mlp.parameters():
-              p.requires_grad = True
+
+        if updated:
+            l4c_residual.update(residual_mlp)
+        for p in residual_mlp.parameters():
+            p.requires_grad = True
     
     env.close()
     u_history = np.array(u_history)

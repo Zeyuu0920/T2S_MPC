@@ -19,7 +19,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from src.models import MLP
+from src.models import TwoSpeedMLP, time_embedding_np
 from src.dynamics import Quadrotor2DDynamics
 from src.mpc import MPC
 from src.utils import get_pb_handles, get_mass
@@ -58,14 +58,15 @@ if args.noise_std is not None:
 
 print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 10
+NUM_RUNS = 1
 BASE_SEED = args.seed
+TIME_FEAT_DIM = 32 #set to 0 here to evaluate contribution of time embedding
+TIME_SCALE = 1.0
 
 all_run_errors = []
 
 COST = 'LINEAR_LS'  # NONLINEAR_LS
 SAVE_FLAG = True
-
 
 env_config = {
     'gui': False,  # Set to False for faster data collection
@@ -84,8 +85,45 @@ env_config = {
     }
 
 }
+
 env = Quadrotor(**env_config)
 model = env.symbolic
+
+def make_batch_from_samples(samples_np, nominal_func, time_feat_dim):
+    """
+    samples_np: shape (B, 8 + d + 3)
+      first (8+d): network input feature = [x(6), u(2), phi(d)]
+      last 3: measured acc [dx2, dz2, dtheta2]
+
+    returns:
+      X_batch: torch tensor, shape (B, 8+d)
+      y_target: torch tensor, shape (B, 3)
+    """
+    X_np = samples_np[:, :8 + time_feat_dim].astype(np.float32)
+    y_true_np = samples_np[:, 8 + time_feat_dim:].astype(np.float32)
+
+    # use only x,u to compute nominal acceleration
+    xu_np = X_np[:, :8]      # [x(6), u(2)]
+    x_np = xu_np[:, :6]
+    u_np = xu_np[:, 6:8]
+
+    nominal = np.array([
+        nominal_func(x_np[j], u_np[j]).full().flatten()
+        for j in range(len(samples_np))
+    ])
+
+    y_nominal = nominal[:, [1, 3, 5]].astype(np.float32)
+    y_target_np = y_true_np - y_nominal
+
+    X_batch = torch.tensor(X_np, dtype=torch.float32)
+    y_target = torch.tensor(y_target_np, dtype=torch.float32)
+
+    return X_batch, y_target
+
+def reset_module(m):
+    if hasattr(m, "reset_parameters"):
+        m.reset_parameters()
+
 # MPC Setup
 N = 20
 t_horizon = 1
@@ -93,9 +131,14 @@ t_horizon = 1
 # ------------------------------------------------------------------------------
 # Simulation Setup
 dt = 1.0 / env_config['pyb_freq']
-Tsim = 20
+Tsim = 10
 Steps = int(Tsim / dt)
-batch_size = 32
+#T2S Hyperparameter
+B_FAST = 32
+B_SLOW = 128
+REPLAY_MAX = 5000
+SLOW_UPDATE_EVERY = 25
+FAST_UPDATE_EVERY = 10
 
 for run_id in range(NUM_RUNS):
     
@@ -129,14 +172,27 @@ for run_id in range(NUM_RUNS):
     print("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
     
     # 3️⃣ Reset Neural Network/Solver
-    residual_mlp = MLP(input_dim=6 + 2, output_dim=3, hidden_dim=64, num_layers=3)
+    # Create PyTorch residual model
+    residual_mlp = TwoSpeedMLP(
+        input_dim=8 + TIME_FEAT_DIM,
+        hidden_dim=64,
+        output_dim=3
+    )
+
+    #Build L4CasADi wrapper
+    with torch.no_grad():
+        dummy_inp = torch.zeros((1, 8 + TIME_FEAT_DIM), dtype=torch.float32)
+        l4c_residual = l4c.L4CasADi(
+            residual_mlp,
+            name="residual_quadrotor2D",
+            mutable=True
+        )
+        l4c_residual.build(inp=dummy_inp)
     for param in residual_mlp.parameters():
         param.requires_grad = False
-    l4c_residual = l4c.L4CasADi(residual_mlp, name="residual_quadrotor2D", mutable=True)
-    residual_optimizer = torch.optim.Adam(residual_mlp.parameters(), lr=1e-3)
-    residual_criterion = nn.MSELoss()
 
-    learned_model = Quadrotor2DDynamics(env, residual_model=l4c_residual, use_residual=True, use_time_embedding=False)
+    learned_model = Quadrotor2DDynamics(env,residual_model=l4c_residual,use_residual=True,use_time_embedding=True,time_feat_dim=TIME_FEAT_DIM,
+time_scale=TIME_SCALE,)
     casadi_model = learned_model.model()
     nominal_func = cs.Function('nom', [casadi_model.x, casadi_model.u], [casadi_model.f_nominal])
     solver = MPC(
@@ -146,60 +202,61 @@ for run_id in range(NUM_RUNS):
         external_shared_lib_dir=l4c_residual.shared_lib_dir,
         external_shared_lib_name=l4c_residual.name
     ).solver
-    
+
+
+    #Setup optimizers / loss
+    slow_params = list(residual_mlp.layer1.parameters()) + list(residual_mlp.layer2.parameters())
+    fast_params = list(residual_mlp.layer3.parameters())
+
+    slow_optimizer = torch.optim.Adam(slow_params, lr=1e-2)
+    fast_optimizer = torch.optim.Adam(fast_params, lr=1e-3)
+    criterion = nn.MSELoss()
+
     #Pre-define
-    obs_buffer = []
-    loss_history = []
-
     xt = obs[:6]
-
+    obs_buffer = []
     x_history = [xt]
     u_history = []
     x_ref_history = []
+    opt_times=[]
+    opt_times_fast = []
+    opt_times_slow=[]
+    loss_fast_history = []
+    loss_slow_history = []
     Ax=[]
-    opt_times =[]
+    x_prev=None
 
     #Simulation
     for i in range(Steps):
         print(f"[STEP {i}] Solving MPC...", flush=True)
-        current_time = i * dt
 
-        # Circle parameters
-        radius = 0.5  # meters
-        center_x = 0.0
-        center_z = 1.0
-        omega = 2 * np.pi / Tsim  # One circle every 10 seconds
+        current_time = i * dt
+        for k in range(N):
+            t_future = current_time + k * (t_horizon / N)
+            tau_k = t_future / TIME_SCALE
+            solver.set(k, "p", np.array([tau_k], dtype=np.float64))
 
         # Set reference for each step in MPC horizon (all zeros)
         for k in range(N):
-            t_future = current_time + k * t_horizon / N
-            x_circ = center_x + radius * np.cos(omega * t_future)
-            z_circ = center_z + radius * np.sin(omega * t_future)
-
-            if k == 0:  # Only store the first reference of each MPC horizon 
-                x_ref_history.append([x_circ, z_circ, 0]) # x, z, theta
+            if k == 0:  # Only store the first reference of each MPC horizon
+                x_ref_history.append([0, 1, 0])
                 
             # Set reference for state [x, x_dot, z, z_dot, theta, theta_dot, u1, u2]
-            y_ref_k = np.array([x_circ, 0, z_circ, 0, 0, 0, 0, 0])  # Full reference
+            y_ref_k = np.array([0, 0, 1, 0, 0, 0, 0, 0])  # All zeros for reference
             solver.set(k, "yref", y_ref_k)
-
         # Set terminal reference (only state)
-        t_terminal = current_time + t_horizon
-        x_term = center_x + radius * np.cos(omega * t_terminal)
-        z_term = center_z + radius * np.sin(omega * t_terminal)
-        y_ref_terminal = np.array([x_term, 0, z_term, 0, 0, 0])
+        y_ref_terminal = np.array([0, 0, 1, 0, 0, 0])  # All zeros for terminal reference
         solver.set(N, "yref", y_ref_terminal)
 
         # Apply current state as constraint
         solver.set(0, "lbx", xt)
         solver.set(0, "ubx", xt)
-        
-        start = time.time()
+
         # Solve MPC and apply control
         solver.solve()
         ut = solver.get(0, "u")
         u_history.append(ut)
-        
+
         #Disturbance induce
         ax = wind_fn(current_time, **wind_params)
         Ax.append(ax)
@@ -214,6 +271,7 @@ for run_id in range(NUM_RUNS):
                       flags=pb.WORLD_FRAME,
                       physicsClientId=cid)
         
+        x_prev = xt.copy()
         # Since simulation_step seems to be missing, let's use the environment step
         next_obs, reward, done, info = env.step(ut)
         xt = next_obs[:6]
@@ -222,57 +280,101 @@ for run_id in range(NUM_RUNS):
         xt_measured = xt + np.random.normal(0, 0.01, size=6)
         #xt = xt_measured
         x_history.append(xt)
-
+        
         # --------------------Residual----------------------#
         # Compute x_ddot theta_ddot from difference
         if i > 0:
+            
             dx2 = (x_history[-1][1] - x_history[-2][1]) / dt
             dz2 = (x_history[-1][3] - x_history[-2][3]) / dt
             dtheta2 = (x_history[-1][5] - x_history[-2][5]) / dt  # theta_ddot
 
             # Append: [state (6), action (2), measured accel (3)]
-            obs_buffer.append((*xt, *ut, dx2, dz2, dtheta2))
-
-        if i > 0 and i % int(0.5 / dt) == 0 and len(obs_buffer) >= batch_size:
+            tau_t = (i * dt) / TIME_SCALE
+            phi = time_embedding_np(tau_t, d=TIME_FEAT_DIM)         # (d,)
+            
+            xu = np.concatenate([x_prev, ut]).astype(np.float32)    # (8,)
+            feat = np.concatenate([xu, phi]).astype(np.float32)     # (8+d,)
+            
+            obs_buffer.append((*feat, dx2, dz2, dtheta2))
+            if len(obs_buffer) > REPLAY_MAX:
+                obs_buffer.pop(0)
+        #fast update
+        '''
+        updated = False
+        if i > 0 and (i % FAST_UPDATE_EVERY== 0)and len(obs_buffer) >= B_FAST:
             start = time.time()
-            data = np.array(obs_buffer[-batch_size:])   # Recent data
+            data_fast = np.array(obs_buffer[-B_FAST:], dtype=np.float32)
 
-            X_batch = torch.tensor(data[:, :8], dtype=torch.float32)
-            y_true = data[:, 8:]
-
-            nominal = np.array([
-                nominal_func(x[:6], x[6:8]).full().flatten() for x in data
-            ])
-            y_nominal = nominal[:, [1, 3, 5]]
-
-            y_target = torch.tensor(y_true - y_nominal, dtype=torch.float32)
-
-            for p in residual_mlp.parameters(): p.requires_grad = True
-            for _ in range (20):
-                residual_optimizer.zero_grad()
-                pred = residual_mlp(X_batch)
-                loss = residual_criterion(pred, y_target)
-                loss_history.append(loss.item())
-
-                loss.backward()
-                print(loss, "loss")
-                residual_optimizer.step()
+            # Split into input features and target
+            X_fast, y_fast = make_batch_from_samples(
+                data_fast,
+                nominal_func=nominal_func,
+                time_feat_dim=TIME_FEAT_DIM
+            )
+            
+            for p in residual_mlp.layer1.parameters(): p.requires_grad = False
+            for p in residual_mlp.layer2.parameters(): p.requires_grad = False
+            for p in residual_mlp.layer3.parameters(): p.requires_grad = True
+            
+            for _ in range(10):
+                fast_optimizer.zero_grad()                                  
+                pred_fast = residual_mlp(X_fast)
+                loss_fast = criterion(pred_fast, y_fast)
+                loss_fast.backward()
+                fast_optimizer.step()
+                loss_fast_history.append(float(loss_fast.detach().cpu()))
+                print(loss_fast,"loss_fast")
+                updated = True
+            if updated:
+                l4c_residual.update(residual_mlp)
+            elapsed_fast = time.time() - start
+            print(elapsed_fast, "iteration time")
+            opt_times_fast.append(elapsed_fast)
 
             for p in residual_mlp.parameters():
-                p.requires_grad = False
+                p.requires_grad = True
+            '''
+        updated = False
+        #slow update
+        if i > 0 and (i % SLOW_UPDATE_EVERY == 0) and len(obs_buffer) >= B_SLOW:
+            start_2 = time.time()
+            idx = np.random.choice(len(obs_buffer), size=B_SLOW, replace=False)
+            data_slow = np.array([obs_buffer[j] for j in idx], dtype=np.float32)
+            X_slow, y_slow = make_batch_from_samples(
+                data_slow,
+                nominal_func=nominal_func,
+                time_feat_dim=TIME_FEAT_DIM
+            )
 
+        # update slow layers
+            for p in residual_mlp.layer1.parameters(): p.requires_grad = True
+            for p in residual_mlp.layer2.parameters(): p.requires_grad = True
+            for p in residual_mlp.layer3.parameters(): p.requires_grad = False
+
+            for _ in range (20):
+                slow_optimizer.zero_grad(set_to_none=True)
+                for p in residual_mlp.layer3.parameters():
+                    p.grad = None
+                pred_slow = residual_mlp(X_slow)
+                loss_slow = criterion(pred_slow, y_slow)
+                print(loss_slow,"loss_slow")
+                loss_slow_history.append(float(loss_slow.detach().cpu()))
+                loss_slow.backward()
+                slow_optimizer.step()
+                updated = True
+        
+            elapsed_slow = time.time() - start_2
+            print(elapsed_slow, "iteration time")
+            opt_times_slow.append(elapsed_slow)
+
+        if updated:
             l4c_residual.update(residual_mlp)
-            elapsed = time.time() - start
-            opt_times.append(elapsed)
-            print(elapsed, "iteration time")
-                
-    
-
+        for p in residual_mlp.parameters():
+            p.requires_grad = True
     
     env.close()
     u_history = np.array(u_history)
-
-
 
     # Create time grids with matching dimensions
     t_grid_states = np.linspace(0, Tsim, len(x_history))
@@ -320,9 +422,9 @@ for run_id in range(NUM_RUNS):
         })
 
         seed = env_config['seed']
-        os.makedirs("results_tracking_circle", exist_ok=True)
+        os.makedirs("results_stabilization", exist_ok=True)
 
-        name_parts = [f"Neural_MPC_{WIND_TYPE}"]
+        name_parts = [f"T2S_wo_two_scales_{WIND_TYPE}"]
 
         if args.A is not None:
             name_parts.append(f"A{args.A}")
@@ -340,7 +442,7 @@ for run_id in range(NUM_RUNS):
         name_parts.append(f"seed{seed}")
 
         filename = "_".join(name_parts) + ".csv"
-        csv_path = os.path.join("results_tracking_circle", filename)
+        csv_path = os.path.join("results_stabilization", filename)
 
         df.to_csv(csv_path, index=False)
         print(f"Saved trajectory to {csv_path}")
@@ -356,55 +458,67 @@ x_ref_history = np.array(x_ref_history)
 t_grid_states = np.linspace(0, Tsim, len(x_history))
 t_grid_inputs = np.linspace(0, Tsim, len(u_history))
 
-print(f'Mean iteration time: {1000*np.mean(opt_times):.1f}ms -- {1/np.mean(opt_times):.0f}Hz)')
+#Computation efficiency
+print(f'fast iteration time: {1000*np.mean(opt_times_fast):.1f}ms -- {1/np.mean(opt_times_fast):.0f}Hz)')
+print(f'slow iteration time: {1000*np.mean(opt_times_slow):.1f}ms -- {1/np.mean(opt_times_slow):.0f}Hz)')
 print(f'State history shape: {x_history.shape}, Control history shape: {u_history.shape}')
 
 # ------------------------------------------------------------------------------
 # Plot
-plt.figure(figsize=(10, 4))
-plt.plot(u_history, color='C0', linewidth=2)
-plt.xlabel('Time [s]')
-plt.ylabel('Thrust')
-plt.title('force')
-plt.grid(True)
-plt.tight_layout()
-
-plt.figure(figsize=(10, 4))
-
+plt.figure(figsize=(15, 10))
+t_grid_states = np.arange(len(x_history)) * dt
 plt.plot(Ax, color='C0', linewidth=2)
 plt.xlabel('Time [s]')
 plt.ylabel('Wind Accel [m/s²]')
-plt.title('Slowly Varying Wind')
+plt.title('Wind-induced disturbances')
 plt.grid(True)
 plt.tight_layout()
 
-# Plot error curve
-plt.figure(figsize=(10, 4))
-x_err = x_history[1:, 0] - x_ref_history[:, 0]
-z_err = x_history[1:, 2] - x_ref_history[:, 1]
+plt.figure(figsize=(15, 10))
+plt.plot(loss_fast_history, color='C0', linewidth=2)
+plt.title('Loss Fast')
 
+plt.figure(figsize=(15, 10))
+plt.plot(loss_slow_history, color='C0', linewidth=2)
+plt.title('Loss Slow')
+
+
+x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
+z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
 xz_err = np.sqrt(x_err**2 + z_err**2)
 
-plt.plot(xz_err, label='Euclidean x-z error', color='C3', linewidth=2, linestyle='--')
-plt.xlabel('Time [s]')
-plt.ylabel('Error [m]')
-plt.legend()
-plt.grid()
-
-# Plot x-z plane (2D trajectory)
-plt.figure(figsize=(8, 8))
-plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
-plt.plot(x_ref_history[:, 0], x_ref_history[:, 1], '--', label="Reference", color='C0', linewidth=2)
-plt.xlabel('x [m]')
-plt.ylabel('z [m]')
-plt.title("2D Trajectory in x-z Plane")
-plt.grid()
-plt.axis('equal')  # Make x and z scales equal
-plt.legend()
-
-plt.tight_layout()
+t_err = t_grid_states[1:] 
 
 mean_avg_error = np.mean(xz_err)
 print("Mean average X-Z error:", mean_avg_error)
+# Plot x error
+
+plt.figure(figsize=(15, 10))
+Y_LIM = (0.0, 0.5)
+
+plt.subplot(3, 1, 1)
+plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
+plt.ylabel('x [m]')
+plt.ylim(*Y_LIM)
+plt.grid()
+
+plt.subplot(3, 1, 2)
+plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
+plt.ylabel('z [m]')
+plt.ylim(*Y_LIM)
+plt.grid()
+
+plt.subplot(3, 1, 3)
+plt.plot(t_err, xz_err, linewidth=2)
+plt.ylabel('X–Z [m]')
+plt.ylim(*Y_LIM)
+plt.grid()
+
+plt.figure(figsize=(15, 10))
+plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
+plt.title('Trajectory')
+
+
+plt.tight_layout()
 
 plt.show()
