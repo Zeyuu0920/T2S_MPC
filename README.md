@@ -3,9 +3,30 @@
 Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Online Adaptive MPC for Time-Varying Dynamics"
 
 ## 🎥 Demo
+Stabilization 
+<p align="center">
+  <img src="demo_videos/Nominal_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="demo_videos/Neural_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="demo_videos/T2S_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
+</p>
 
 <p align="center">
-  <img src="demo_videos/demo.gif" width="600">
+  Nominal MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  Neural MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  T2S MPC
+</p>
+
+Tracking
+<p align="center">
+  <img src="demo_videos/Nominal_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="demo_videos/Neural_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="demo_videos/T2S_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
+</p>
+
+<p align="center">
+  Nominal MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  Neural MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  T2S MPC
 </p>
 
 ## 🧠 Overview
@@ -133,9 +154,9 @@ T2S_Neural_MPC
 
 Contains runnable scripts corresponding paper's method and baselines.
 
-- item Nominal MPC: baseline controller using only nominal dynamics.
-- item Neural MPC: MPC with online residual learning via standard MLP.
-- item T2S MPC: proposed Time-Embedded Two-Timescale Online Adaptive MPC.
+- Nominal MPC: baseline controller using only nominal dynamics.
+- Neural MPC: MPC with online residual learning via standard MLP.
+- T2S MPC: proposed Time-Embedded Two-Timescale Online Adaptive MPC.
 
 Each controller is evaluated on:stabilization and trajectory tracking (circle / figure-8)
 

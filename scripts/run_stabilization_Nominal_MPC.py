@@ -36,13 +36,16 @@ parser.add_argument("--phase", type=float, help="Wind phase")
 parser.add_argument("--drift_rate", type=float, help="Wind drift rate")
 parser.add_argument("--slope", type=float, help="Linear/step wind slope")
 parser.add_argument("--noise_std", type=float, help="Wind noise std")
-
+parser.add_argument("--quiet", action="store_true", help="Reduce console output")
+parser.add_argument("--no-plot", action="store_true", help="Disable all plotting")
 
 args = parser.parse_args()
 
+DO_PLOT = not args.no_plot
+VERBOSE = not args.quiet
+
 WIND_TYPE = args.wind
 wind_fn = get_wind_function(WIND_TYPE)
-wind_params = {}
 
 wind_params = {}
 
@@ -58,7 +61,11 @@ if args.slope is not None:
     wind_params["slope"] = args.slope
 if args.noise_std is not None:
     wind_params["noise_std"] = args.noise_std
-print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
+print("wind function =", wind_fn.__name__, wind_params)
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
 
 NUM_RUNS = 10
 BASE_SEED = args.seed
@@ -144,8 +151,8 @@ for run_id in range(NUM_RUNS):
 
     print("pybullet bodies:", pb.getNumBodies(physicsClientId=cid))
     print("ROBOT_ID used:", ROBOT_ID)
-    print("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
-    print("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
+    vprint("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
+    vprint("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
 
     xt = obs[:6]
 
@@ -157,7 +164,7 @@ for run_id in range(NUM_RUNS):
 
     #Simulation
     for i in range(Steps):
-        print(f"[STEP {i}] Solving MPC...", flush=True)
+        vprint(f"[STEP {i}] Solving MPC...", flush=True)
         current_time = i * dt
 
         # Set reference for each step in MPC horizon (all zeros)
@@ -186,10 +193,10 @@ for run_id in range(NUM_RUNS):
         ax = wind_fn(current_time, **wind_params)
         Ax.append(ax)
         Fx = MASS * ax  # F = m * a
-        if i % 50 == 0:  # 每 1 秒打印一次
+        if i % 50 == 0:  
             base_pos, base_orn = pb.getBasePositionAndOrientation(ROBOT_ID, physicsClientId=cid)
             base_vel, base_avel = pb.getBaseVelocity(ROBOT_ID, physicsClientId=cid)
-            print(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
+            vprint(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
 
         pb.applyExternalForce(objectUniqueId=ROBOT_ID, linkIndex=-1,
                       forceObj=[Fx, 0.0, 0.0], posObj=[0.0, 0.0, 0.0],
@@ -208,11 +215,9 @@ for run_id in range(NUM_RUNS):
         x_history.append(xt)
         
         if status != 0:
-           print("[ACADOS FAIL]", i, "status", status, "u", ut)
+           vprint("[ACADOS FAIL]", i, "status", status, "u", ut)
            break
 
-        
-        
         elapsed = time.time() - start
         opt_times.append(elapsed)
         
@@ -233,8 +238,10 @@ for run_id in range(NUM_RUNS):
     z_err = x_history[1:, 2] - x_ref_history[:, 1]
 
     xz_err = np.sqrt(x_err**2 + z_err**2)
+    #print error
+    mean_avg_error = np.mean(xz_err)
+    print("Mean average X-Z error:", mean_avg_error)
     
-
     all_run_errors.append(xz_err)
 
     if SAVE_FLAG:
@@ -303,81 +310,77 @@ x_ref_history = np.array(x_ref_history)
 t_grid_states = np.linspace(0, Tsim, len(x_history))
 t_grid_inputs = np.linspace(0, Tsim, len(u_history))
 
-print(f'Mean iteration time: {1000*np.mean(opt_times):.1f}ms -- {1/np.mean(opt_times):.0f}Hz)')
-print(f'State history shape: {x_history.shape}, Control history shape: {u_history.shape}')
+vprint(f'Mean iteration time: {1000*np.mean(opt_times):.1f}ms -- {1/np.mean(opt_times):.0f}Hz)')
+vprint(f'State history shape: {x_history.shape}, Control history shape: {u_history.shape}')
 
 # ------------------------------------------------------------------------------
 # Plot
+if DO_PLOT:
+    plt.figure(figsize=(15, 10))
+    t_grid_states = np.arange(len(x_history)) * dt
+    plt.plot(Ax, color='C0', linewidth=2)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Wind Accel [m/s²]')
+    plt.title('Wind-induced disturbances')
+    plt.grid(True)
+    plt.tight_layout()
 
-plt.figure(figsize=(15, 10))
-t_grid_states = np.arange(len(x_history)) * dt
-plt.plot(Ax, color='C0', linewidth=2)
-plt.xlabel('Time [s]')
-plt.ylabel('Wind Accel [m/s²]')
-plt.title('Wind-induced disturbances')
-plt.grid(True)
-plt.tight_layout()
+    fig, axs = plt.subplots(6, 1, figsize=(12, 14), sharex=True)
 
-fig, axs = plt.subplots(6, 1, figsize=(12, 14), sharex=True)
+    labels = ['x [m]', 'x_dot [m/s]',
+            'z [m]', 'z_dot [m/s]',
+            'theta [rad]', 'theta_dot [rad/s]']
 
-labels = ['x [m]', 'x_dot [m/s]',
-          'z [m]', 'z_dot [m/s]',
-          'theta [rad]', 'theta_dot [rad/s]']
+    t = np.arange(len(x_history))  #  t * dt
 
-t = np.arange(len(x_history))  # 或 t * dt
+    for i in range(6):
+        axs[i].plot(t, x_history[:, i], linewidth=2)
+        axs[i].set_ylabel(labels[i])
+        axs[i].grid(True)
 
-for i in range(6):
-    axs[i].plot(t, x_history[:, i], linewidth=2)
-    axs[i].set_ylabel(labels[i])
-    axs[i].grid(True)
+    axs[-1].set_xlabel("Time step")
+    plt.suptitle("State Trajectories")
+    plt.tight_layout()
 
-axs[-1].set_xlabel("Time step")
-plt.suptitle("State Trajectories")
-plt.tight_layout()
+    plt.figure(figsize=(15,10))
+    plt.plot(u_history)
+    plt.title("u_history")
 
-plt.figure(figsize=(15,10))
-plt.plot(u_history)
-plt.title("u_history")
+    plt.figure(figsize=(15, 10))
 
-plt.figure(figsize=(15, 10))
+    x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
+    z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
+    xz_err = np.sqrt(x_err**2 + z_err**2)
 
-x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
-z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
-xz_err = np.sqrt(x_err**2 + z_err**2)
+    t_err = t_grid_states[1:] 
 
-t_err = t_grid_states[1:] 
+    # Plot x error
+    Y_LIM = (0.0, 0.5)
 
-# Plot x error
-Y_LIM = (0.0, 0.5)
+    plt.subplot(3, 1, 1)
+    plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
+    plt.ylabel('x [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
 
-plt.subplot(3, 1, 1)
-plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
-plt.ylabel('x [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
+    plt.subplot(3, 1, 2)
+    plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
+    plt.ylabel('z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
 
-plt.subplot(3, 1, 2)
-plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
-plt.ylabel('z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
+    plt.subplot(3, 1, 3)
+    plt.plot(t_err, xz_err, linewidth=2)
+    plt.ylabel('X–Z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
 
-plt.subplot(3, 1, 3)
-plt.plot(t_err, xz_err, linewidth=2)
-plt.ylabel('X–Z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.figure(figsize=(15, 10))
-plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
-plt.title('Trajectory')
+    plt.figure(figsize=(15, 10))
+    plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
+    plt.title('Trajectory')
 
 
-plt.tight_layout()
+    plt.tight_layout()
 
-mean_avg_error = np.mean(xz_err)
-print("Mean average X-Z error:", mean_avg_error)
-
-plt.show()
-
+    plt.show()
 

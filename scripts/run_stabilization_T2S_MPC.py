@@ -36,8 +36,13 @@ parser.add_argument("--phase", type=float)
 parser.add_argument("--drift_rate", type=float)
 parser.add_argument("--slope", type=float)
 parser.add_argument("--noise_std", type=float)
+parser.add_argument("--quiet", action="store_true", help="Reduce console output")
+parser.add_argument("--no-plot", action="store_true", help="Disable all plotting")
 
 args = parser.parse_args()
+
+DO_PLOT = not args.no_plot
+VERBOSE = not args.quiet
 
 WIND_TYPE = args.wind
 wind_fn = get_wind_function(WIND_TYPE)
@@ -56,7 +61,11 @@ if args.slope is not None:
 if args.noise_std is not None:
     wind_params["noise_std"] = args.noise_std
 
-print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
+print("wind function =", wind_fn.__name__, wind_params)
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
 
 NUM_RUNS = 10
 BASE_SEED = args.seed
@@ -72,7 +81,7 @@ env_config = {
     'gui': False,  # Set to False for faster data collection
     'ctrl_freq': 50,  # Control frequency
     'pyb_freq': 50,  # Physics simulation frequency
-    'seed': 41,
+    'seed': 42,
     'done_on_out_of_bound': True,  # Set to False if you want longer episodes
     
     'init_state_randomization_info': {
@@ -85,10 +94,6 @@ env_config = {
     }
 
 }
-
-np.random.seed(42)
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
 
 env = Quadrotor(**env_config)
 model = env.symbolic
@@ -132,61 +137,7 @@ def reset_module(m):
 N = 20
 t_horizon = 1
 
-# ============================================================
-# Build model / solver ONCE outside the run loop (match original script)
-# ============================================================
 
-# create one environment for building symbolic model / solver
-env = Quadrotor(**env_config)
-obs, info = env.reset()
-# create residual network
-residual_mlp = TwoSpeedMLP(
-    input_dim=8 + TIME_FEAT_DIM,
-    hidden_dim=64,
-    output_dim=3
-)
-
-# build l4casadi wrapper once
-with torch.no_grad():
-    dummy_inp = torch.zeros((1, 8 + TIME_FEAT_DIM), dtype=torch.float32)
-    l4c_residual = l4c.L4CasADi(
-        residual_mlp,
-        name="residual_quadrotor2D",
-        mutable=True
-    )
-    l4c_residual.build(inp=dummy_inp)
-
-# follow original script: parameters initially trainable afterwards
-for p in residual_mlp.parameters():
-    p.requires_grad = True
-
-# build dynamics / nominal function / solver once
-learned_model = Quadrotor2DDynamics(
-    env,
-    residual_model=l4c_residual,
-    use_residual=True,
-    use_time_embedding=True,
-    time_feat_dim=TIME_FEAT_DIM,
-    time_scale=TIME_SCALE,
-)
-
-casadi_model = learned_model.model()
-nominal_func = cs.Function(
-    'nom',
-    [casadi_model.x, casadi_model.u],
-    [casadi_model.f_nominal]
-)
-
-solver = MPC(
-    model=learned_model.model(),
-    N=N,
-    t_horizon=t_horizon,
-    external_shared_lib_dir=l4c_residual.shared_lib_dir,
-    external_shared_lib_name=l4c_residual.name
-).solver
-
-# same as original script: push current network weights once
-l4c_residual.update(residual_mlp)
 # ------------------------------------------------------------------------------
 # Simulation Setup
 dt = 1.0 / env_config['pyb_freq']
@@ -227,21 +178,41 @@ for run_id in range(NUM_RUNS):
 
     print("pybullet bodies:", pb.getNumBodies(physicsClientId=cid))
     print("ROBOT_ID used:", ROBOT_ID)
-    print("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
-    print("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
+    vprint("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
+    vprint("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
     
-    # reset the already-existing residual_mlp first
-    residual_mlp.apply(reset_module)
-
-    # then create the actual network for this run
+    # 3️⃣ Reset Neural Network/Solver
+    # Create PyTorch residual model
     residual_mlp = TwoSpeedMLP(
         input_dim=8 + TIME_FEAT_DIM,
         hidden_dim=64,
         output_dim=3
     )
 
-    # sync new weights into the already-built l4casadi wrapper / solver graph
-    l4c_residual.update(residual_mlp)
+    #Build L4CasADi wrapper
+    with torch.no_grad():
+        dummy_inp = torch.zeros((1, 8 + TIME_FEAT_DIM), dtype=torch.float32)
+        l4c_residual = l4c.L4CasADi(
+            residual_mlp,
+            name="residual_quadrotor2D",
+            mutable=True
+        )
+        l4c_residual.build(inp=dummy_inp)
+    for param in residual_mlp.parameters():
+        param.requires_grad = False
+
+    learned_model = Quadrotor2DDynamics(env,residual_model=l4c_residual,use_residual=True,use_time_embedding=True,time_feat_dim=TIME_FEAT_DIM,
+time_scale=TIME_SCALE,)
+    casadi_model = learned_model.model()
+    nominal_func = cs.Function('nom', [casadi_model.x, casadi_model.u], [casadi_model.f_nominal])
+    solver = MPC(
+        model=learned_model.model(),
+        N=N,
+        t_horizon=t_horizon,
+        external_shared_lib_dir=l4c_residual.shared_lib_dir,
+        external_shared_lib_name=l4c_residual.name
+    ).solver
+
 
     #Setup optimizers / loss
     slow_params = list(residual_mlp.layer1.parameters()) + list(residual_mlp.layer2.parameters())
@@ -250,6 +221,7 @@ for run_id in range(NUM_RUNS):
     slow_optimizer = torch.optim.Adam(slow_params, lr=1e-2)
     fast_optimizer = torch.optim.Adam(fast_params, lr=1e-3)
     criterion = nn.MSELoss()
+
 
     #Pre-define
     xt = obs[:6]
@@ -267,7 +239,7 @@ for run_id in range(NUM_RUNS):
 
     #Simulation
     for i in range(Steps):
-        print(f"[STEP {i}] Solving MPC...", flush=True)
+        vprint(f"[STEP {i}] Solving MPC...", flush=True)
 
         current_time = i * dt
         for k in range(N):
@@ -309,7 +281,7 @@ for run_id in range(NUM_RUNS):
         if i % 50 == 0:  
             base_pos, base_orn = pb.getBasePositionAndOrientation(ROBOT_ID, physicsClientId=cid)
             base_vel, base_avel = pb.getBaseVelocity(ROBOT_ID, physicsClientId=cid)
-            print(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
+            vprint(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
 
         pb.applyExternalForce(objectUniqueId=ROBOT_ID, linkIndex=-1,
                       forceObj=[Fx, 0.0, 0.0], posObj=[0.0, 0.0, 0.0],
@@ -368,11 +340,11 @@ for run_id in range(NUM_RUNS):
                 loss_fast.backward()
                 fast_optimizer.step()
                 loss_fast_history.append(float(loss_fast.detach().cpu()))
-                print(loss_fast,"loss_fast")
+                vprint(loss_fast,"loss_fast")
                 updated = True
 
             elapsed_fast = time.time() - start
-            print(elapsed_fast, "iteration time")
+            vprint(elapsed_fast, "iteration time")
             opt_times_fast.append(elapsed_fast)
 
         #slow update
@@ -397,14 +369,14 @@ for run_id in range(NUM_RUNS):
                     p.grad = None
                 pred_slow = residual_mlp(X_slow)
                 loss_slow = criterion(pred_slow, y_slow)
-                print(loss_slow,"loss_slow")
+                vprint(loss_slow,"loss_slow")
                 loss_slow_history.append(float(loss_slow.detach().cpu()))
                 loss_slow.backward()
                 slow_optimizer.step()
                 updated = True
         
             elapsed_slow = time.time() - start_2
-            print(elapsed_slow, "iteration time")
+            vprint(elapsed_slow, "iteration time")
             opt_times_slow.append(elapsed_slow)
 
         if updated:
@@ -427,6 +399,9 @@ for run_id in range(NUM_RUNS):
     z_err = x_history[1:, 2] - x_ref_history[:, 1]
 
     xz_err = np.sqrt(x_err**2 + z_err**2)
+    #print mean error
+    mean_avg_error = np.mean(xz_err)
+    print("Mean average X-Z error:", mean_avg_error)
 
     all_run_errors.append(xz_err)
 
@@ -498,66 +473,65 @@ t_grid_states = np.linspace(0, Tsim, len(x_history))
 t_grid_inputs = np.linspace(0, Tsim, len(u_history))
 
 #Computation efficiency
-print(f'fast iteration time: {1000*np.mean(opt_times_fast):.1f}ms -- {1/np.mean(opt_times_fast):.0f}Hz)')
-print(f'slow iteration time: {1000*np.mean(opt_times_slow):.1f}ms -- {1/np.mean(opt_times_slow):.0f}Hz)')
-print(f'State history shape: {x_history.shape}, Control history shape: {u_history.shape}')
+vprint(f'fast iteration time: {1000*np.mean(opt_times_fast):.1f}ms -- {1/np.mean(opt_times_fast):.0f}Hz)')
+vprint(f'slow iteration time: {1000*np.mean(opt_times_slow):.1f}ms -- {1/np.mean(opt_times_slow):.0f}Hz)')
+vprint(f'State history shape: {x_history.shape}, Control history shape: {u_history.shape}')
 
 # ------------------------------------------------------------------------------
 # Plot
-plt.figure(figsize=(15, 10))
-t_grid_states = np.arange(len(x_history)) * dt
-plt.plot(Ax, color='C0', linewidth=2)
-plt.xlabel('Time [s]')
-plt.ylabel('Wind Accel [m/s²]')
-plt.title('Wind-induced disturbances')
-plt.grid(True)
-plt.tight_layout()
+if DO_PLOT:
+    plt.figure(figsize=(15, 10))
+    t_grid_states = np.arange(len(x_history)) * dt
+    plt.plot(Ax, color='C0', linewidth=2)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Wind Accel [m/s²]')
+    plt.title('Wind-induced disturbances')
+    plt.grid(True)
+    plt.tight_layout()
 
-plt.figure(figsize=(15, 10))
-plt.plot(loss_fast_history, color='C0', linewidth=2)
-plt.title('Loss Fast')
+    plt.figure(figsize=(15, 10))
+    plt.plot(loss_fast_history, color='C0', linewidth=2)
+    plt.title('Loss Fast')
 
-plt.figure(figsize=(15, 10))
-plt.plot(loss_slow_history, color='C0', linewidth=2)
-plt.title('Loss Slow')
-
-
-x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
-z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
-xz_err = np.sqrt(x_err**2 + z_err**2)
-
-t_err = t_grid_states[1:] 
-
-mean_avg_error = np.mean(xz_err)
-print("Mean average X-Z error:", mean_avg_error)
-# Plot x error
-
-plt.figure(figsize=(15, 10))
-Y_LIM = (0.0, 0.5)
-
-plt.subplot(3, 1, 1)
-plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
-plt.ylabel('x [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.subplot(3, 1, 2)
-plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
-plt.ylabel('z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.subplot(3, 1, 3)
-plt.plot(t_err, xz_err, linewidth=2)
-plt.ylabel('X–Z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.figure(figsize=(15, 10))
-plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
-plt.title('Trajectory')
+    plt.figure(figsize=(15, 10))
+    plt.plot(loss_slow_history, color='C0', linewidth=2)
+    plt.title('Loss Slow')
 
 
-plt.tight_layout()
+    x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
+    z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
+    xz_err = np.sqrt(x_err**2 + z_err**2)
 
-plt.show()
+    t_err = t_grid_states[1:] 
+
+    # Plot x error
+
+    plt.figure(figsize=(15, 10))
+    Y_LIM = (0.0, 0.5)
+
+    plt.subplot(3, 1, 1)
+    plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
+    plt.ylabel('x [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.subplot(3, 1, 2)
+    plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
+    plt.ylabel('z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.subplot(3, 1, 3)
+    plt.plot(t_err, xz_err, linewidth=2)
+    plt.ylabel('X–Z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.figure(figsize=(15, 10))
+    plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
+    plt.title('Trajectory')
+
+
+    plt.tight_layout()
+
+    plt.show()

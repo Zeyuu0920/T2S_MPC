@@ -13,7 +13,9 @@ variants = {
  
     "T2S-MPC(w/o time emd)": "T2S_wo_time_emd_periodic_A0.003_period2.0_noise0.0005_seed",
     "T2S-MPC(w/o 2 scales)": "T2S_wo_two_scales_periodic_A0.003_period2.0_noise0.0005_seed",
-    "T2S-MPC(ours)": "T2S_MPC_periodic_A0.003_period2.0_noise0.0005_seed",
+    "T2S-MPC(w/o time emd)": "T2S_wo_time_emd_periodic_A0.003_period2.0_noise0.0005_seed",
+    "T2S-MPC(w/o 2 scales)": "T2S_wo_two_scales_periodic_A0.003_period2.0_noise0.0005_seed",
+    "T2S-MPC(ours)": "T2S_MPC_periodic_A0.003_periodic_A0.003_period2.0_noise0.0005_seed",
 
 }
 
