@@ -226,4 +226,3 @@ dependencies:
       - virtualenv==20.30.0
       - wadler-lindig==0.1.4
       - zipp==3.21.0
-prefix: /home/yu/anaconda3/envs/l4control
