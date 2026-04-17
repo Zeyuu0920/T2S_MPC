@@ -36,8 +36,13 @@ parser.add_argument("--phase", type=float)
 parser.add_argument("--drift_rate", type=float)
 parser.add_argument("--slope", type=float)
 parser.add_argument("--noise_std", type=float)
+parser.add_argument("--quiet", action="store_true", help="Reduce console output")
+parser.add_argument("--no-plot", action="store_true", help="Disable all plotting")
 
 args = parser.parse_args()
+
+DO_PLOT = not args.no_plot
+VERBOSE = not args.quiet
 
 WIND_TYPE = args.wind
 wind_fn = get_wind_function(WIND_TYPE)
@@ -56,9 +61,13 @@ if args.slope is not None:
 if args.noise_std is not None:
     wind_params["noise_std"] = args.noise_std
 
-print("[DEBUG] wind function =", wind_fn.__name__, wind_params)
+print("wind function =", wind_fn.__name__, wind_params)
 
-NUM_RUNS = 1
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
+
+NUM_RUNS = 10
 BASE_SEED = args.seed
 TIME_FEAT_DIM = 32 #set to 0 here to evaluate contribution of time embedding
 TIME_SCALE = 1.0
@@ -168,8 +177,8 @@ for run_id in range(NUM_RUNS):
 
     print("pybullet bodies:", pb.getNumBodies(physicsClientId=cid))
     print("ROBOT_ID used:", ROBOT_ID)
-    print("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
-    print("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
+    vprint("dyn info exists?", pb.getDynamicsInfo(ROBOT_ID, -1, physicsClientId=cid)[0])
+    vprint("[DEBUG] cid =", cid, "robot_id =", ROBOT_ID, "num_bodies =", pb.getNumBodies(physicsClientId=cid), "mass =", MASS)
     
     # 3️⃣ Reset Neural Network/Solver
     # Create PyTorch residual model
@@ -228,7 +237,7 @@ time_scale=TIME_SCALE,)
 
     #Simulation
     for i in range(Steps):
-        print(f"[STEP {i}] Solving MPC...", flush=True)
+        vprint(f"[STEP {i}] Solving MPC...", flush=True)
 
         current_time = i * dt
         for k in range(N):
@@ -264,7 +273,7 @@ time_scale=TIME_SCALE,)
         if i % 50 == 0:  
             base_pos, base_orn = pb.getBasePositionAndOrientation(ROBOT_ID, physicsClientId=cid)
             base_vel, base_avel = pb.getBaseVelocity(ROBOT_ID, physicsClientId=cid)
-            print(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
+            vprint(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
 
         pb.applyExternalForce(objectUniqueId=ROBOT_ID, linkIndex=-1,
                       forceObj=[Fx, 0.0, 0.0], posObj=[0.0, 0.0, 0.0],
@@ -358,14 +367,14 @@ time_scale=TIME_SCALE,)
                     p.grad = None
                 pred_slow = residual_mlp(X_slow)
                 loss_slow = criterion(pred_slow, y_slow)
-                print(loss_slow,"loss_slow")
+                vprint(loss_slow,"loss_slow")
                 loss_slow_history.append(float(loss_slow.detach().cpu()))
                 loss_slow.backward()
                 slow_optimizer.step()
                 updated = True
         
             elapsed_slow = time.time() - start_2
-            print(elapsed_slow, "iteration time")
+            vprint(elapsed_slow, "iteration time")
             opt_times_slow.append(elapsed_slow)
 
         if updated:
@@ -388,6 +397,9 @@ time_scale=TIME_SCALE,)
     z_err = x_history[1:, 2] - x_ref_history[:, 1]
 
     xz_err = np.sqrt(x_err**2 + z_err**2)
+    #print mean error
+    mean_avg_error = np.mean(xz_err)
+    print("Mean average X-Z error:", mean_avg_error)
 
     all_run_errors.append(xz_err)
 
@@ -465,60 +477,59 @@ print(f'State history shape: {x_history.shape}, Control history shape: {u_histor
 
 # ------------------------------------------------------------------------------
 # Plot
-plt.figure(figsize=(15, 10))
-t_grid_states = np.arange(len(x_history)) * dt
-plt.plot(Ax, color='C0', linewidth=2)
-plt.xlabel('Time [s]')
-plt.ylabel('Wind Accel [m/s²]')
-plt.title('Wind-induced disturbances')
-plt.grid(True)
-plt.tight_layout()
+if DO_PLOT:
+    plt.figure(figsize=(15, 10))
+    t_grid_states = np.arange(len(x_history)) * dt
+    plt.plot(Ax, color='C0', linewidth=2)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Wind Accel [m/s²]')
+    plt.title('Wind-induced disturbances')
+    plt.grid(True)
+    plt.tight_layout()
 
-plt.figure(figsize=(15, 10))
-plt.plot(loss_fast_history, color='C0', linewidth=2)
-plt.title('Loss Fast')
+    plt.figure(figsize=(15, 10))
+    plt.plot(loss_fast_history, color='C0', linewidth=2)
+    plt.title('Loss Fast')
 
-plt.figure(figsize=(15, 10))
-plt.plot(loss_slow_history, color='C0', linewidth=2)
-plt.title('Loss Slow')
-
-
-x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
-z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
-xz_err = np.sqrt(x_err**2 + z_err**2)
-
-t_err = t_grid_states[1:] 
-
-mean_avg_error = np.mean(xz_err)
-print("Mean average X-Z error:", mean_avg_error)
-# Plot x error
-
-plt.figure(figsize=(15, 10))
-Y_LIM = (0.0, 0.5)
-
-plt.subplot(3, 1, 1)
-plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
-plt.ylabel('x [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.subplot(3, 1, 2)
-plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
-plt.ylabel('z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.subplot(3, 1, 3)
-plt.plot(t_err, xz_err, linewidth=2)
-plt.ylabel('X–Z [m]')
-plt.ylim(*Y_LIM)
-plt.grid()
-
-plt.figure(figsize=(15, 10))
-plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
-plt.title('Trajectory')
+    plt.figure(figsize=(15, 10))
+    plt.plot(loss_slow_history, color='C0', linewidth=2)
+    plt.title('Loss Slow')
 
 
-plt.tight_layout()
+    x_err = x_history[1:, 0] - x_ref_history[:, 0]  # 250
+    z_err = x_history[1:, 2] - x_ref_history[:, 1]  # 250
+    xz_err = np.sqrt(x_err**2 + z_err**2)
 
-plt.show()
+    t_err = t_grid_states[1:] 
+
+    # Plot x error
+
+    plt.figure(figsize=(15, 10))
+    Y_LIM = (0.0, 0.5)
+
+    plt.subplot(3, 1, 1)
+    plt.plot(t_err, np.abs(x_history[1:, 0]-x_ref_history[:, 0]), linewidth=2)
+    plt.ylabel('x [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.subplot(3, 1, 2)
+    plt.plot(t_err, np.abs(x_history[1:, 2]-x_ref_history[:, 1]), linewidth=2)
+    plt.ylabel('z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.subplot(3, 1, 3)
+    plt.plot(t_err, xz_err, linewidth=2)
+    plt.ylabel('X–Z [m]')
+    plt.ylim(*Y_LIM)
+    plt.grid()
+
+    plt.figure(figsize=(15, 10))
+    plt.plot(x_history[:, 0], x_history[:, 2], label="Trajectory", color='C1', linewidth=2)
+    plt.title('Trajectory')
+
+
+    plt.tight_layout()
+
+    plt.show()
