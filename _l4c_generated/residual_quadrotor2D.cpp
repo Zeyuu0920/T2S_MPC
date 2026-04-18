@@ -1,6 +1,6 @@
 #include <l4casadi.hpp>
 
-L4CasADi l4casadi("/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/_l4c_generated", "residual_quadrotor2D", 1, 40, 1, 3, "cpu", true, true, true, false, true, true);
+L4CasADi l4casadi("/mnt/e/JHU/Research/General_Learning_Paradigm/Experiment/MetaResidual-MPC/Quadrotor_2D_Stabilization/T2S_Neural_MPC/_l4c_generated", "residual_quadrotor2D", 1, 8, 1, 3, "cpu", true, true, true, false, true, true);
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +33,7 @@ extern "C" {
 
 // Function residual_quadrotor2D
 
-static const casadi_int residual_quadrotor2D_s_in0[3] = { 1, 40, 1};
+static const casadi_int residual_quadrotor2D_s_in0[3] = { 1, 8, 1};
 static const casadi_int residual_quadrotor2D_s_out0[3] = { 1, 3, 1};
 
 // Only single input, single output is supported at the moment

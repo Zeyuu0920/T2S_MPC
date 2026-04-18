@@ -64,25 +64,23 @@ void casadi_copy(const casadi_real* x, casadi_int n, casadi_real* y) {
 
 static const casadi_int casadi_s0[3] = {6, 1, 1};
 static const casadi_int casadi_s1[3] = {2, 1, 1};
-static const casadi_int casadi_s2[3] = {1, 1, 1};
+static const casadi_int casadi_s2[3] = {0, 1, 1};
 
 /* External functions */
 int residual_quadrotor2D(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem);
 
 
-/* residual_quadrotor2D:(i0[1x40])->(o0[1x3]) */
+/* residual_quadrotor2D:(i0[1x8])->(o0[1x3]) */
 static int casadi_f1(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   if (residual_quadrotor2D(arg, res, iw, w, mem)) return 1;
   return 0;
 }
 
-/* quadrotor2D_learned_expl_ode_fun:(i0[6],i1[2],i2)->(o0[6]) */
+/* quadrotor2D_learned_expl_ode_fun:(i0[6],i1[2],i2[0])->(o0[6]) */
 static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_int i;
   casadi_real **res1=res+1, *rr, w00, w01, w02, w03, w04, w05, w06, w07, w08, w09;
-  casadi_real *w10=w+10, w11, w12, w13, w14, w15, w16, w17, w18, w19, w20, w21;
-  casadi_real w22, w23, w24, w25, w26, w27, w28, w29, w30, w31, w32, w33;
-  casadi_real w34, w35, w36, w37, w38, w39, w40, w41, *w42=w+47, *w43=w+87, *w44=w+90;
+  casadi_real *w10=w+10, *w11=w+16, *w12=w+24, *w13=w+27;
   const casadi_real **arg1=arg+3, *cs;
   /* #0: @0 = input[0][1] */
   w00 = arg[0] ? arg[0][1] : 0;
@@ -144,138 +142,8 @@ static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   w08 = arg[0] ? arg[0][0] : 0;
   /* #26: @5 = input[0][2] */
   w05 = arg[0] ? arg[0][2] : 0;
-  /* #27: @9 = 3.14159 */
-  w09 = 3.1415926535897931e+00;
-  /* #28: @11 = input[2][0] */
-  w11 = arg[2] ? arg[2][0] : 0;
-  /* #29: @9 = (@9*@11) */
-  w09 *= w11;
-  /* #30: @12 = sin(@9) */
-  w12 = sin( w09 );
-  /* #31: @13 = 1.5708 */
-  w13 = 1.5707963267948966e+00;
-  /* #32: @13 = (@13*@11) */
-  w13 *= w11;
-  /* #33: @14 = sin(@13) */
-  w14 = sin( w13 );
-  /* #34: @15 = 1.0472 */
-  w15 = 1.0471975511965976e+00;
-  /* #35: @15 = (@15*@11) */
-  w15 *= w11;
-  /* #36: @16 = sin(@15) */
-  w16 = sin( w15 );
-  /* #37: @17 = 0.785398 */
-  w17 = 7.8539816339744828e-01;
-  /* #38: @17 = (@17*@11) */
-  w17 *= w11;
-  /* #39: @18 = sin(@17) */
-  w18 = sin( w17 );
-  /* #40: @19 = 0.628319 */
-  w19 = 6.2831853071795862e-01;
-  /* #41: @19 = (@19*@11) */
-  w19 *= w11;
-  /* #42: @20 = sin(@19) */
-  w20 = sin( w19 );
-  /* #43: @21 = 0.523599 */
-  w21 = 5.2359877559829882e-01;
-  /* #44: @21 = (@21*@11) */
-  w21 *= w11;
-  /* #45: @22 = sin(@21) */
-  w22 = sin( w21 );
-  /* #46: @23 = 0.448799 */
-  w23 = 4.4879895051282759e-01;
-  /* #47: @23 = (@23*@11) */
-  w23 *= w11;
-  /* #48: @24 = sin(@23) */
-  w24 = sin( w23 );
-  /* #49: @25 = 0.392699 */
-  w25 = 3.9269908169872414e-01;
-  /* #50: @25 = (@25*@11) */
-  w25 *= w11;
-  /* #51: @26 = sin(@25) */
-  w26 = sin( w25 );
-  /* #52: @27 = 0.349066 */
-  w27 = 3.4906585039886590e-01;
-  /* #53: @27 = (@27*@11) */
-  w27 *= w11;
-  /* #54: @28 = sin(@27) */
-  w28 = sin( w27 );
-  /* #55: @29 = 0.314159 */
-  w29 = 3.1415926535897931e-01;
-  /* #56: @29 = (@29*@11) */
-  w29 *= w11;
-  /* #57: @30 = sin(@29) */
-  w30 = sin( w29 );
-  /* #58: @31 = 0.285599 */
-  w31 = 2.8559933214452665e-01;
-  /* #59: @31 = (@31*@11) */
-  w31 *= w11;
-  /* #60: @32 = sin(@31) */
-  w32 = sin( w31 );
-  /* #61: @33 = 0.261799 */
-  w33 = 2.6179938779914941e-01;
-  /* #62: @33 = (@33*@11) */
-  w33 *= w11;
-  /* #63: @34 = sin(@33) */
-  w34 = sin( w33 );
-  /* #64: @35 = 0.241661 */
-  w35 = 2.4166097335306100e-01;
-  /* #65: @35 = (@35*@11) */
-  w35 *= w11;
-  /* #66: @36 = sin(@35) */
-  w36 = sin( w35 );
-  /* #67: @37 = 0.224399 */
-  w37 = 2.2439947525641379e-01;
-  /* #68: @37 = (@37*@11) */
-  w37 *= w11;
-  /* #69: @38 = sin(@37) */
-  w38 = sin( w37 );
-  /* #70: @39 = 0.20944 */
-  w39 = 2.0943951023931953e-01;
-  /* #71: @39 = (@39*@11) */
-  w39 *= w11;
-  /* #72: @40 = sin(@39) */
-  w40 = sin( w39 );
-  /* #73: @41 = 0.19635 */
-  w41 = 1.9634954084936207e-01;
-  /* #74: @41 = (@41*@11) */
-  w41 *= w11;
-  /* #75: @11 = sin(@41) */
-  w11 = sin( w41 );
-  /* #76: @9 = cos(@9) */
-  w09 = cos( w09 );
-  /* #77: @13 = cos(@13) */
-  w13 = cos( w13 );
-  /* #78: @15 = cos(@15) */
-  w15 = cos( w15 );
-  /* #79: @17 = cos(@17) */
-  w17 = cos( w17 );
-  /* #80: @19 = cos(@19) */
-  w19 = cos( w19 );
-  /* #81: @21 = cos(@21) */
-  w21 = cos( w21 );
-  /* #82: @23 = cos(@23) */
-  w23 = cos( w23 );
-  /* #83: @25 = cos(@25) */
-  w25 = cos( w25 );
-  /* #84: @27 = cos(@27) */
-  w27 = cos( w27 );
-  /* #85: @29 = cos(@29) */
-  w29 = cos( w29 );
-  /* #86: @31 = cos(@31) */
-  w31 = cos( w31 );
-  /* #87: @33 = cos(@33) */
-  w33 = cos( w33 );
-  /* #88: @35 = cos(@35) */
-  w35 = cos( w35 );
-  /* #89: @37 = cos(@37) */
-  w37 = cos( w37 );
-  /* #90: @39 = cos(@39) */
-  w39 = cos( w39 );
-  /* #91: @41 = cos(@41) */
-  w41 = cos( w41 );
-  /* #92: @42 = vertcat(@8, @0, @5, @7, @1, @6, @3, @4, @12, @14, @16, @18, @20, @22, @24, @26, @28, @30, @32, @34, @36, @38, @40, @11, @9, @13, @15, @17, @19, @21, @23, @25, @27, @29, @31, @33, @35, @37, @39, @41) */
-  rr=w42;
+  /* #27: @11 = vertcat(@8, @0, @5, @7, @1, @6, @3, @4) */
+  rr=w11;
   *rr++ = w08;
   *rr++ = w00;
   *rr++ = w05;
@@ -284,61 +152,29 @@ static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   *rr++ = w06;
   *rr++ = w03;
   *rr++ = w04;
-  *rr++ = w12;
-  *rr++ = w14;
-  *rr++ = w16;
-  *rr++ = w18;
-  *rr++ = w20;
-  *rr++ = w22;
-  *rr++ = w24;
-  *rr++ = w26;
-  *rr++ = w28;
-  *rr++ = w30;
-  *rr++ = w32;
-  *rr++ = w34;
-  *rr++ = w36;
-  *rr++ = w38;
-  *rr++ = w40;
-  *rr++ = w11;
-  *rr++ = w09;
-  *rr++ = w13;
-  *rr++ = w15;
-  *rr++ = w17;
-  *rr++ = w19;
-  *rr++ = w21;
-  *rr++ = w23;
-  *rr++ = w25;
-  *rr++ = w27;
-  *rr++ = w29;
-  *rr++ = w31;
-  *rr++ = w33;
-  *rr++ = w35;
-  *rr++ = w37;
-  *rr++ = w39;
-  *rr++ = w41;
-  /* #93: @42 = @42' */
-  /* #94: @43 = residual_quadrotor2D(@42) */
-  arg1[0]=w42;
-  res1[0]=w43;
+  /* #28: @11 = @11' */
+  /* #29: @12 = residual_quadrotor2D(@11) */
+  arg1[0]=w11;
+  res1[0]=w12;
   if (casadi_f1(arg1, res1, iw, w, 0)) return 1;
-  /* #95: @43 = @43' */
-  /* #96: @8 = @43[0] */
-  for (rr=(&w08), cs=w43+0; cs!=w43+1; cs+=1) *rr++ = *cs;
-  /* #97: @0 = @43[1] */
-  for (rr=(&w00), cs=w43+1; cs!=w43+2; cs+=1) *rr++ = *cs;
-  /* #98: @5 = @43[2] */
-  for (rr=(&w05), cs=w43+2; cs!=w43+3; cs+=1) *rr++ = *cs;
-  /* #99: @44 = vertcat(@2, @8, @2, @0, @2, @5) */
-  rr=w44;
+  /* #30: @12 = @12' */
+  /* #31: @8 = @12[0] */
+  for (rr=(&w08), cs=w12+0; cs!=w12+1; cs+=1) *rr++ = *cs;
+  /* #32: @0 = @12[1] */
+  for (rr=(&w00), cs=w12+1; cs!=w12+2; cs+=1) *rr++ = *cs;
+  /* #33: @5 = @12[2] */
+  for (rr=(&w05), cs=w12+2; cs!=w12+3; cs+=1) *rr++ = *cs;
+  /* #34: @13 = vertcat(@2, @8, @2, @0, @2, @5) */
+  rr=w13;
   *rr++ = w02;
   *rr++ = w08;
   *rr++ = w02;
   *rr++ = w00;
   *rr++ = w02;
   *rr++ = w05;
-  /* #100: @10 = (@10+@44) */
-  for (i=0, rr=w10, cs=w44; i<6; ++i) (*rr++) += (*cs++);
-  /* #101: output[0][0] = @10 */
+  /* #35: @10 = (@10+@13) */
+  for (i=0, rr=w10, cs=w13; i<6; ++i) (*rr++) += (*cs++);
+  /* #36: output[0][0] = @10 */
   casadi_copy(w10, 6, res[0]);
   return 0;
 }
@@ -414,18 +250,18 @@ CASADI_SYMBOL_EXPORT const casadi_int* quadrotor2D_learned_expl_ode_fun_sparsity
 }
 
 CASADI_SYMBOL_EXPORT int quadrotor2D_learned_expl_ode_fun_work(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
-  if (sz_arg) *sz_arg = 43;
+  if (sz_arg) *sz_arg = 11;
   if (sz_res) *sz_res = 2;
   if (sz_iw) *sz_iw = 0;
-  if (sz_w) *sz_w = 96;
+  if (sz_w) *sz_w = 33;
   return 0;
 }
 
 CASADI_SYMBOL_EXPORT int quadrotor2D_learned_expl_ode_fun_work_bytes(casadi_int *sz_arg, casadi_int* sz_res, casadi_int *sz_iw, casadi_int *sz_w) {
-  if (sz_arg) *sz_arg = 43*sizeof(const casadi_real*);
+  if (sz_arg) *sz_arg = 11*sizeof(const casadi_real*);
   if (sz_res) *sz_res = 2*sizeof(casadi_real*);
   if (sz_iw) *sz_iw = 0*sizeof(casadi_int);
-  if (sz_w) *sz_w = 96*sizeof(casadi_real);
+  if (sz_w) *sz_w = 33*sizeof(casadi_real);
   return 0;
 }
 

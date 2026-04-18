@@ -374,14 +374,7 @@ void quadrotor2D_learned_acados_create_setup_functions(quadrotor2D_learned_solve
 void quadrotor2D_learned_acados_create_set_default_parameters(quadrotor2D_learned_solver_capsule* capsule)
 {
 
-    const int N = capsule->nlp_solver_plan->N;
-    // initialize parameters to nominal value
-    double* p = calloc(NP, sizeof(double));
-
-    for (int i = 0; i <= N; i++) {
-        quadrotor2D_learned_acados_update_params(capsule, i, p, NP);
-    }
-    free(p);
+    // no parameters defined
 
 
     // no global parameters defined
@@ -950,7 +943,7 @@ int quadrotor2D_learned_acados_update_params(quadrotor2D_learned_solver_capsule*
 {
     int solver_status = 0;
 
-    int casadi_np = 1;
+    int casadi_np = 0;
     if (casadi_np != np) {
         printf("acados_update_params: trying to set %i parameters for external functions."
             " External function has %i parameters. Exiting.\n", np, casadi_np);

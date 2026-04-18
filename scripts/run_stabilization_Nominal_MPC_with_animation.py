@@ -85,15 +85,34 @@ def disturbance_to_bgr(d):
     rgb = tuple(int(255 * c) for c in rgba[:3])
     return (rgb[2], rgb[1], rgb[0])   # OpenCV is BGR
 
-def capture_frame(cid, width=960, height=720):
+ERR_MIN = 0.0
+ERR_MAX = 0.05   
+
+err_cmap = cm.get_cmap("viridis_r")
+err_norm = mcolors.Normalize(vmin=ERR_MIN, vmax=ERR_MAX)
+
+def error_to_bgr(e):
+    rgba = err_cmap(err_norm(e))
+    rgb = tuple(int(255 * c) for c in rgba[:3])
+    return (rgb[2], rgb[1], rgb[0])
+
+def capture_frame(cid, target_x, target_z, width=960, height=720):
+    #tracking's capture_frame function
+    cam_offset_y = -0.8
+    cam_offset_z = 0.12
+
+    eye_x = target_x
+    eye_y = cam_offset_y
+    eye_z = target_z + cam_offset_z
+
     view_matrix = pb.computeViewMatrix(
-        cameraEyePosition=[0.0, -2.2, 1.2],
-        cameraTargetPosition=[0.0, 0.0, 1.0],
+        cameraEyePosition=[eye_x, eye_y, eye_z],
+        cameraTargetPosition=[target_x, 0.0, target_z],
         cameraUpVector=[0, 0, 1]
     )
 
     proj_matrix = pb.computeProjectionMatrixFOV(
-        fov=60,
+        fov=45,
         aspect=width / height,
         nearVal=0.1,
         farVal=10.0
@@ -112,44 +131,52 @@ def capture_frame(cid, width=960, height=720):
     frame = rgba[:, :, :3].copy()
     return frame, view_matrix, proj_matrix
 
-def draw_trail(frame, x_history, view_matrix, proj_matrix, trail_len=40):
-    """
-    x_history: list/array of states, each state has x at index 0 and z at index 2
-    """
+def draw_trail(frame, x_history, error_history, view_matrix, proj_matrix, trail_len=40):
     h, w = frame.shape[:2]
 
-    if len(x_history) < 2:
+    if len(x_history) < 2 or len(error_history) < 1:
         return frame
 
-    start_idx = max(0, len(x_history) - trail_len)
-    trail_states = x_history[start_idx:]
+    num_segments = min(len(x_history) - 1, len(error_history))
+
+    start_idx = max(0, num_segments - trail_len)
 
     pixel_points = []
-    for state in trail_states:
+    segment_errors = []
+
+    for seg_idx in range(start_idx, num_segments):
+        state = x_history[seg_idx + 1]   
         x = state[0]
         z = state[2]
 
         pt = world_to_pixel([x, 0.0, z], view_matrix, proj_matrix, w, h)
         if pt is not None:
             pixel_points.append(pt)
+            segment_errors.append(error_history[seg_idx])
 
+    if len(pixel_points) < 2:
+        return frame
 
     for i in range(1, len(pixel_points)):
+        e = segment_errors[i]
+        color = error_to_bgr(e)
+
         alpha = i / len(pixel_points)
-
         thickness = max(1, int(1 + 4 * alpha))
-        color = (
-            int(50 + 180 * alpha),
-            int(120 + 100 * alpha),
-            int(255)
-        )  
 
-        cv2.line(frame, pixel_points[i-1], pixel_points[i], color, thickness, cv2.LINE_AA)
+        cv2.line(
+            frame,
+            pixel_points[i - 1],
+            pixel_points[i],
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
 
-    if len(pixel_points) > 0:
-        cv2.circle(frame, pixel_points[-1], 5, (0, 255, 255), -1, cv2.LINE_AA)
+    cv2.circle(frame, pixel_points[-1], 5, (0, 255, 255), -1, cv2.LINE_AA)
 
     return frame
+
 
 def world_to_pixel(point_world, view_matrix, proj_matrix, width, height):
     """
@@ -176,14 +203,38 @@ def world_to_pixel(point_world, view_matrix, proj_matrix, width, height):
     v = int((1 - (ndc[1] + 1) * 0.5) * height)   
     return (u, v)
 
+def draw_text_with_outline(frame, text, pos, font_scale=0.8,
+                           text_color=(255, 255, 255),
+                           outline_color=(0, 0, 0),
+                           text_thickness=2,
+                           outline_thickness=5):
+    cv2.putText(
+        frame,
+        text,
+        pos,
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale,
+        outline_color,
+        outline_thickness,
+        cv2.LINE_AA
+    )
+    cv2.putText(
+        frame,
+        text,
+        pos,
+        cv2.FONT_HERSHEY_SIMPLEX,
+        font_scale,
+        text_color,
+        text_thickness,
+        cv2.LINE_AA
+    )
+
 def draw_overlay(frame, disturbance, current_time, method_name="Nominal MPC"):
     h, w = frame.shape[:2]
 
     color = disturbance_to_bgr(disturbance)
 
     x0, y0 = 100, h - 90
-
-
     max_len = 140
     scale = max(abs(DIST_MIN), abs(DIST_MAX))
     dx = int(np.clip(disturbance / scale, -1, 1) * max_len)
@@ -197,39 +248,9 @@ def draw_overlay(frame, disturbance, current_time, method_name="Nominal MPC"):
         tipLength=0.25
     )
 
-    cv2.putText(
-        frame,
-        method_name,
-        (30, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1.0,
-        (0, 255, 255),   
-        2,
-        cv2.LINE_AA
-    )
-
-    cv2.putText(
-    frame,
-    f"color range: [{DIST_MIN:.3f}, {DIST_MAX:.3f}]",
-    (30, h - 60),
-    cv2.FONT_HERSHEY_SIMPLEX,
-    0.6,
-    (220, 220, 220),
-    1,
-    cv2.LINE_AA
-)
-
-    cv2.putText(
-        frame,
-        f"disturbance = {disturbance:+.4f}",
-        (30, h - 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (255, 255, 255),
-        2,
-        cv2.LINE_AA
-    )
-
+    draw_text_with_outline(frame, method_name, (30, 40), 1.0)
+    draw_text_with_outline(frame, f"t = {current_time:.2f}s", (30, 80), 0.8)
+    draw_text_with_outline(frame,f"disturbance = {disturbance:+.4f} m/s^2", (30, h - 30), 0.8)
     return frame
 
 def draw_colorbar(frame, current_disturbance, dist_min, dist_max, bar_x=None):
@@ -263,16 +284,14 @@ def draw_colorbar(frame, current_disturbance, dist_min, dist_max, bar_x=None):
         1
     )
 
-    def draw_text_with_outline(frame, text, pos, font_scale=0.55):
-        cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_SIMPLEX,
-                    font_scale, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame, text, pos, cv2.FONT_HERSHEY_SIMPLEX,
-                    font_scale, (0, 255, 255), 1, cv2.LINE_AA)
-
-    draw_text_with_outline(frame, f"{dist_max:+.3f}", (bar_x - 5, bar_y - 10), 0.5)
-    draw_text_with_outline(frame, f"{0:+.3f}", (bar_x - 5, bar_y + bar_height // 2 + 5), 0.5)
-    draw_text_with_outline(frame, f"{dist_min:+.3f}", (bar_x - 5, bar_y + bar_height + 20), 0.5)
-    draw_text_with_outline(frame, "dist", (bar_x - 2, bar_y + bar_height + 45), 0.55)
+    draw_text_with_outline(frame, f"{dist_max:+.3f}", (bar_x - 5, bar_y - 10), 0.5,
+                       text_color=(0, 255, 255), text_thickness=1, outline_thickness=4)
+    draw_text_with_outline(frame, f"{0:+.3f}", (bar_x - 5, bar_y + bar_height // 2 + 5), 0.5,
+                        text_color=(0, 255, 255), text_thickness=1, outline_thickness=4)
+    draw_text_with_outline(frame, f"{dist_min:+.3f}", (bar_x - 5, bar_y + bar_height + 20), 0.5,
+                        text_color=(0, 255, 255), text_thickness=1, outline_thickness=4)
+    draw_text_with_outline(frame, "dist", (bar_x - 2, bar_y + bar_height + 45), 0.55,
+                        text_color=(0, 255, 255), text_thickness=1, outline_thickness=4)
 
     ratio = (current_disturbance - dist_min) / (dist_max - dist_min)
     ratio = np.clip(ratio, 0, 1)
@@ -290,15 +309,69 @@ def draw_colorbar(frame, current_disturbance, dist_min, dist_max, bar_x=None):
 
     return frame
 
+def draw_error_colorbar(frame, current_error, err_min, err_max, bar_x=None):
+    h, w = frame.shape[:2]
+
+    bar_width = 32
+    bar_height = 300
+
+    if bar_x is None:
+        bar_x = w - 90
+    bar_y = 80
+
+    for i in range(bar_height):
+        ratio = 1.0 - i / (bar_height - 1)
+        value = err_min + ratio * (err_max - err_min)
+        color = error_to_bgr(value)
+
+        cv2.line(
+            frame,
+            (bar_x, bar_y + i),
+            (bar_x + bar_width, bar_y + i),
+            color,
+            1
+        )
+
+    cv2.rectangle(
+        frame,
+        (bar_x, bar_y),
+        (bar_x + bar_width, bar_y + bar_height),
+        (255, 255, 255),
+        1
+    )
+
+    draw_text_with_outline(frame, f"{err_max:.2f}", (bar_x - 5, bar_y - 10), 0.7,
+                       text_color=(255, 255, 255), text_thickness=2, outline_thickness=6)
+    draw_text_with_outline(frame, f"{0:.2f}", (bar_x - 5, bar_y + bar_height + 20), 0.7,
+                        text_color=(255, 255, 255), text_thickness=2, outline_thickness=6)
+    draw_text_with_outline(frame, "error[m]", (bar_x - 20, bar_y + bar_height + 45), 0.7,
+                        text_color=(255, 255, 255), text_thickness=2, outline_thickness=6)
+
+    ratio = (current_error - err_min) / (err_max - err_min)
+    ratio = np.clip(ratio, 0, 1)
+    y_marker = int(bar_y + (1 - ratio) * bar_height)
+
+    cv2.line(
+        frame,
+        (bar_x - 10, y_marker),
+        (bar_x + bar_width + 10, y_marker),
+        (255, 255, 255),
+        3
+    )
+
+    cv2.circle(frame, (bar_x + bar_width // 2, y_marker), 6, (255, 255, 255), -1)
+
+    return frame
+
 RECORD_DEMO = True
 DEMO_RUN_ID = 0
-VIDEO_FPS = 20
+VIDEO_FPS = 50
 
 # ------------------------------------------------------------------------------
 # Parameters
 # Configure environment parameters
 env_config = {
-    'gui': True,  # Set to False for faster data collection
+    'gui': False,  # Set to False for faster data collection
     'ctrl_freq': 50,  # Control frequency
     'pyb_freq': 50,  # Physics simulation frequency
     'seed': 42,
@@ -361,28 +434,28 @@ for run_id in range(NUM_RUNS):
 
     video_writer = None
 
-if RECORD_DEMO and run_id == DEMO_RUN_ID:
-    os.makedirs("demo_videos", exist_ok=True)
+    if RECORD_DEMO and run_id == DEMO_RUN_ID:
+        os.makedirs("demo_videos", exist_ok=True)
 
-    video_name_parts = [f"Nominal_MPC_demo_{WIND_TYPE}"]
-    if args.A is not None:
-        video_name_parts.append(f"A{args.A}")
-    if args.period is not None:
-        video_name_parts.append(f"period{args.period}")
-    if args.phase is not None:
-        video_name_parts.append(f"phase{args.phase}")
-    if args.drift_rate is not None:
-        video_name_parts.append(f"drift{args.drift_rate}")
-    if args.slope is not None:
-        video_name_parts.append(f"slope{args.slope}")
-    if args.noise_std is not None:
-        video_name_parts.append(f"noise{args.noise_std}")
-    video_name_parts.append(f"seed{seed}")
+        video_name_parts = [f"Nominal_MPC_stabilization_demo_{WIND_TYPE}"]
+        if args.A is not None:
+            video_name_parts.append(f"A{args.A}")
+        if args.period is not None:
+            video_name_parts.append(f"period{args.period}")
+        if args.phase is not None:
+            video_name_parts.append(f"phase{args.phase}")
+        if args.drift_rate is not None:
+            video_name_parts.append(f"drift{args.drift_rate}")
+        if args.slope is not None:
+            video_name_parts.append(f"slope{args.slope}")
+        if args.noise_std is not None:
+            video_name_parts.append(f"noise{args.noise_std}")
+        video_name_parts.append(f"seed{seed}")
 
-    video_filename = "_".join(video_name_parts) + ".mp4"
-    video_path = os.path.join("demo_videos", video_filename)
+        video_filename = "_".join(video_name_parts) + ".mp4"
+        video_path = os.path.join("demo_videos", video_filename)
 
-    video_writer = imageio.get_writer(video_path, fps=VIDEO_FPS, codec="libx264")
+        video_writer = imageio.get_writer(video_path, fps=VIDEO_FPS, codec="libx264")
 
     cid, ROBOT_ID = get_pb_handles(env)
     MASS = get_mass(cid, ROBOT_ID)
@@ -399,6 +472,11 @@ if RECORD_DEMO and run_id == DEMO_RUN_ID:
     x_ref_history = []
     Ax=[]
     opt_times =[]
+    error_history=[]
+
+    cam_x = None
+    cam_z = None
+    cam_alpha = 0.9
 
     #Simulation
     for i in range(Steps):
@@ -431,7 +509,7 @@ if RECORD_DEMO and run_id == DEMO_RUN_ID:
         ax = wind_fn(current_time, **wind_params)
         Ax.append(ax)
         Fx = MASS * ax  # F = m * a
-        if i % 50 == 0:  # 每 1 秒打印一次
+        if i % 50 == 0:  
             base_pos, base_orn = pb.getBasePositionAndOrientation(ROBOT_ID, physicsClientId=cid)
             base_vel, base_avel = pb.getBaseVelocity(ROBOT_ID, physicsClientId=cid)
             print(f"[DEBUG] t={current_time:.2f}, Fx={Fx:.3e}, vx={base_vel[0]:.3f}, x={base_pos[0]:.3f}")
@@ -446,6 +524,9 @@ if RECORD_DEMO and run_id == DEMO_RUN_ID:
         next_obs, reward, done, info = env.step(ut)
         xt = next_obs[:6]
 
+        current_error = np.sqrt((xt[0] - 0.0)**2 + (xt[2] - 1.0)**2)
+        error_history.append(current_error)
+
         # Add measurement noise (now with correct size=4)
         xt_measured = xt + np.random.normal(0, 0.01, size=6)
         #xt = xt_measured
@@ -453,11 +534,39 @@ if RECORD_DEMO and run_id == DEMO_RUN_ID:
         x_history.append(xt)
 
         if video_writer is not None:
-            frame, view_matrix, proj_matrix = capture_frame(cid)
-            frame = draw_trail(frame, x_history, view_matrix, proj_matrix, trail_len=40)
-            frame = draw_colorbar(frame, current_disturbance=ax, dist_min=DIST_MIN, dist_max=DIST_MAX)
-            frame = draw_overlay(frame, disturbance=ax, current_time=current_time, method_name="Nominal MPC")
-            video_writer.append_data(frame)
+            if 16.0 <= current_time <= 20.0:
+                base_pos, base_orn = pb.getBasePositionAndOrientation(ROBOT_ID, physicsClientId=cid)
+                raw_x = base_pos[0]
+                raw_z = base_pos[2]
+
+                if cam_x is None:
+                    cam_x = raw_x
+                    cam_z = raw_z
+                else:
+                    cam_x = cam_alpha * cam_x + (1 - cam_alpha) * raw_x
+                    cam_z = cam_alpha * cam_z + (1 - cam_alpha) * raw_z
+
+                frame, view_matrix, proj_matrix = capture_frame(
+                    cid,
+                    target_x=cam_x,
+                    target_z=cam_z
+                )
+
+                frame = draw_trail(frame, x_history, error_history, view_matrix, proj_matrix, trail_len=40)
+                frame = draw_error_colorbar(
+                    frame,
+                    current_error=current_error,
+                    err_min=ERR_MIN,
+                    err_max=ERR_MAX
+                )
+                frame = draw_overlay(
+                    frame,
+                    disturbance=ax,
+                    current_time=current_time,
+                    method_name="Nominal MPC"
+                )
+
+                video_writer.append_data(frame)
         
         if status != 0:
            print("[ACADOS FAIL]", i, "status", status, "u", ut)
@@ -562,7 +671,14 @@ print(f'State history shape: {x_history.shape}, Control history shape: {u_histor
 
 # ------------------------------------------------------------------------------
 # Plot
+plt.figure(figsize=(10, 4))
+plt.plot(error_history, color='C0', linewidth=2)
+plt.title('Current Error')
+plt.grid(True)
+plt.tight_layout()
 
+plt.show()
+'''
 plt.figure(figsize=(15, 10))
 t_grid_states = np.arange(len(x_history)) * dt
 plt.plot(Ax, color='C0', linewidth=2)
@@ -633,5 +749,5 @@ mean_avg_error = np.mean(xz_err)
 print("Mean average X-Z error:", mean_avg_error)
 
 plt.show()
-
+'''
 

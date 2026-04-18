@@ -8,14 +8,19 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_circle.gif" width="250px"></td>
-    <td align="center"><img src="Neural_circle.gif" width="250px"></td>
-    <td align="center"><img src="T2S_circle.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Nominal_circle.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Neural_circle.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/T2S_circle.gif" width="250px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
     <td align="center"><b>Neural MPC</b></td>
     <td align="center"><b>T2S MPC (Ours)</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="Figures/circle_nominal_periodic.png" width="250px"></td>
+    <td align="center"><img src="Figures/circle_neural_periodic.png" width="250px"></td>
+    <td align="center"><img src="Figures/circle_t2s_periodic.png" width="250px"></td>
   </tr>
 </table>
 
@@ -23,14 +28,19 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_figure8.gif" width="250px"></td>
-    <td align="center"><img src="Neural_figure8.gif" width="250px"></td>
-    <td align="center"><img src="T2S_figure8.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Nominal_figure8.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Neural_figure8.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/T2S_figure8.gif" width="250px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
     <td align="center"><b>Neural MPC</b></td>
     <td align="center"><b>T2S MPC (Ours)</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="Figures/figure8_nominal_periodic.png" width="250px"></td>
+    <td align="center"><img src="Figures/figure8_neural_periodic.png" width="250px"></td>
+    <td align="center"><img src="Figures/figure8_t2s_periodic.png" width="250px"></td>
   </tr>
 </table>
 
@@ -38,9 +48,9 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_stabilization.gif" width="250px"></td>
-    <td align="center"><img src="Neural_stabilization.gif" width="250px"></td>
-    <td align="center"><img src="T2S_stabilization.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Nominal_stabilization.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/Neural_stabilization.gif" width="250px"></td>
+    <td align="center"><img src="demo_videos/T2S_stabilization.gif" width="250px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
@@ -51,7 +61,7 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 ## 🧠 Overview
 <p align="center">
-  <img src="Figures/Method.png" width="300">
+  <img src="Figures/Method.png" width="600">
 </p>
 <p align="center">
   Figure 1: Method Overview.

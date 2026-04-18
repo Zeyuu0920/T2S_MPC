@@ -85,12 +85,6 @@ int main()
     double u0[NU];
     u0[0] = 0.0;
     u0[1] = 0.0;
-    // set parameters
-    double p[NP];
-    p[0] = 0;
-
-    quadrotor2D_learned_acados_sim_update_params(capsule, p, NP);
-  
 
   
 

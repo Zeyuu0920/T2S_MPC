@@ -169,13 +169,6 @@ int quadrotor2D_learned_acados_sim_create(quadrotor2D_learned_sim_solver_capsule
     capsule->acados_sim_solver = quadrotor2D_learned_sim_solver;
 
 
-    /* initialize parameter values */
-    double* p = calloc(np, sizeof(double));
-    
-
-    quadrotor2D_learned_acados_sim_update_params(capsule, p, np);
-    free(p);
-
 
     /* initialize input */
     // x

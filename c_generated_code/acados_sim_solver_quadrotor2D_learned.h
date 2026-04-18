@@ -37,7 +37,7 @@
 #define QUADROTOR2D_LEARNED_NX     6
 #define QUADROTOR2D_LEARNED_NZ     0
 #define QUADROTOR2D_LEARNED_NU     2
-#define QUADROTOR2D_LEARNED_NP     1
+#define QUADROTOR2D_LEARNED_NP     0
 
 #ifdef __cplusplus
 extern "C" {
