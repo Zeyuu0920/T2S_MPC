@@ -4,7 +4,6 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 ## 🎥 Demo
 
-
 ### Tracking — Circle
 
 <table align="center">
@@ -49,6 +48,14 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
     <td align="center"><b>T2S MPC (Ours)</b></td>
   </tr>
 </table>
+
+## 🧠 Overview
+<p align="center">
+  <img src="Figures/Method.png" width="300">
+</p>
+<p align="center">
+  Figure 1: Method Overview.
+</p>
 
 **Key Contribution**:
 -  We introduce T2S-MPC, a fully online MPC framework
