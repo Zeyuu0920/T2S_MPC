@@ -9,9 +9,9 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_circle.gif" width="300px"></td>
-    <td align="center"><img src="Neural_circle.gif" width="300px"></td>
-    <td align="center"><img src="T2S_circle.gif" width="300px"></td>
+    <td align="center"><img src="Nominal_circle.gif" width="200px"></td>
+    <td align="center"><img src="Neural_circle.gif" width="200px"></td>
+    <td align="center"><img src="T2S_circle.gif" width="200px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
@@ -24,9 +24,9 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_figure8.gif" width="300px"></td>
-    <td align="center"><img src="Neural_figure8.gif" width="300px"></td>
-    <td align="center"><img src="T2S_figure8.gif" width="300px"></td>
+    <td align="center"><img src="Nominal_figure8.gif" width="200px"></td>
+    <td align="center"><img src="Neural_figure8.gif" width="200px"></td>
+    <td align="center"><img src="T2S_figure8.gif" width="200px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
@@ -39,9 +39,9 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 <table align="center">
   <tr>
-    <td align="center"><img src="Nominal_stabilization.gif" width="300px"></td>
-    <td align="center"><img src="Neural_stabilization.gif" width="300px"></td>
-    <td align="center"><img src="T2S_stabilization.gif" width="300px"></td>
+    <td align="center"><img src="Nominal_stabilization.gif" width="200px"></td>
+    <td align="center"><img src="Neural_stabilization.gif" width="200px"></td>
+    <td align="center"><img src="T2S_stabilization.gif" width="200px"></td>
   </tr>
   <tr>
     <td align="center"><b>Nominal MPC</b></td>
