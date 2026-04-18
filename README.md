@@ -7,57 +7,48 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 ### Tracking — Circle
 
-<p align="center">
-  <img src="Nominal_circle.gif" width="32%" />
-  <img src="Neural_circle.gif" width="32%" />
-  <img src="T2S_circle.gif" width="32%" />
-</p>
-
-<p align="center">
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
-</p>
-
----
+<table align="center">
+  <tr>
+    <td align="center"><img src="Nominal_circle.gif" width="300px"></td>
+    <td align="center"><img src="Neural_circle.gif" width="300px"></td>
+    <td align="center"><img src="T2S_circle.gif" width="300px"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Nominal MPC</b></td>
+    <td align="center"><b>Neural MPC</b></td>
+    <td align="center"><b>T2S MPC (Ours)</b></td>
+  </tr>
+</table>
 
 ### Tracking — Figure-8
 
-<p align="center">
-  <img src="Nominal_figure8.gif" width="32%" />
-  <img src="Neural_figure8.gif" width="32%" />
-  <img src="T2S_figure8.gif" width="32%" />
-</p>
-
-<p align="center">
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
-</p>
-
----
+<table align="center">
+  <tr>
+    <td align="center"><img src="Nominal_figure8.gif" width="300px"></td>
+    <td align="center"><img src="Neural_figure8.gif" width="300px"></td>
+    <td align="center"><img src="T2S_figure8.gif" width="300px"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Nominal MPC</b></td>
+    <td align="center"><b>Neural MPC</b></td>
+    <td align="center"><b>T2S MPC (Ours)</b></td>
+  </tr>
+</table>
 
 ### Stabilization
 
-<p align="center">
-  <img src="Nominal_stabilization.gif" width="32%" />
-  <img src="Neural_stabilization.gif" width="32%" />
-  <img src="T2S_stabilization.gif" width="32%" />
-</p>
-
-<p align="center">
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
-  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
-</p>
-
-## 🧠 Overview
-<p align="center">
-  <img src="Figures/Method.png" width="300">
-</p>
-<p align="center">
-  Figure 1: Method Overview.
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="Nominal_stabilization.gif" width="300px"></td>
+    <td align="center"><img src="Neural_stabilization.gif" width="300px"></td>
+    <td align="center"><img src="T2S_stabilization.gif" width="300px"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Nominal MPC</b></td>
+    <td align="center"><b>Neural MPC</b></td>
+    <td align="center"><b>T2S MPC (Ours)</b></td>
+  </tr>
+</table>
 
 **Key Contribution**:
 -  We introduce T2S-MPC, a fully online MPC framework
