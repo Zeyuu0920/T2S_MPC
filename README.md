@@ -3,30 +3,52 @@
 Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Online Adaptive MPC for Time-Varying Dynamics"
 
 ## 🎥 Demo
-Stabilization 
+
+
+### Tracking — Circle
+
 <p align="center">
-  <img src="demo_videos/Nominal_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
-  <img src="demo_videos/Neural_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
-  <img src="demo_videos/T2S_MPC_stabilization_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="Nominal_circle.gif" width="32%" />
+  <img src="Neural_circle.gif" width="32%" />
+  <img src="T2S_circle.gif" width="32%" />
 </p>
 
 <p align="center">
-  Nominal MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  Neural MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  T2S MPC
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
 </p>
 
-Tracking
+---
+
+### Tracking — Figure-8
+
 <p align="center">
-  <img src="demo_videos/Nominal_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
-  <img src="demo_videos/Neural_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
-  <img src="demo_videos/T2S_MPC_tracking_circle_demo_periodic_A0.003_seed42.gif" width="30%">
+  <img src="Nominal_figure8.gif" width="32%" />
+  <img src="Neural_figure8.gif" width="32%" />
+  <img src="T2S_figure8.gif" width="32%" />
 </p>
 
 <p align="center">
-  Nominal MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  Neural MPC &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  T2S MPC
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
+</p>
+
+---
+
+### Stabilization
+
+<p align="center">
+  <img src="Nominal_stabilization.gif" width="32%" />
+  <img src="Neural_stabilization.gif" width="32%" />
+  <img src="T2S_stabilization.gif" width="32%" />
+</p>
+
+<p align="center">
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Nominal MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>Neural MPC</b></span>
+  <span style="display:inline-block; width:32%; text-align:center;"><b>T2S MPC (Ours)</b></span>
 </p>
 
 ## 🧠 Overview
