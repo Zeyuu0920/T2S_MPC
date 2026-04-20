@@ -61,7 +61,7 @@ Official implementation for our paper: "T2S-MPC: Time-Embedded Two-Timescale Onl
 
 ## 🧠 Overview
 <p align="center">
-  <img src="Figures/Method.png" width="600">
+  <img src="Figures/Method.png" width="500">
 </p>
 <p align="center">
   Figure 1: Method Overview.
