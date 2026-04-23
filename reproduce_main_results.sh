@@ -34,4 +34,7 @@ python scripts/plot_stabilization_error_linear.py
 echo "Collect results and compute for Fig.5"
 python scripts/plot_stabilization_error_periodic.py
 
+echo "Plot tracking demo"
+python scripts/plot_tracking_demo.py
+
 echo "Finished."
